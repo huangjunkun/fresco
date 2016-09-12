@@ -55,6 +55,6 @@ public class CloseableProducerToDataSourceAdapter<T>
 
   @Override
   protected void onNewResultImpl(CloseableReference<T> result, boolean isLast) {
-    super.onNewResultImpl(CloseableReference.cloneOrNull(result), isLast);
+    super.onNewResultImpl(result, isLast);
   }
 }
