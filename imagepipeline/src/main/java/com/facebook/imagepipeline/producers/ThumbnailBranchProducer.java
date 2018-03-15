@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
@@ -36,11 +34,11 @@ public class ThumbnailBranchProducer implements Producer<EncodedImage> {
       final Consumer<EncodedImage> consumer,
       final ProducerContext context) {
     if (context.getImageRequest().getResizeOptions() == null) {
-      consumer.onNewResult(null, true);
+      consumer.onNewResult(null, Consumer.IS_LAST);
     } else {
       boolean requested = produceResultsFromThumbnailProducer(0, consumer, context);
       if (!requested) {
-        consumer.onNewResult(null, true);
+        consumer.onNewResult(null, Consumer.IS_LAST);
       }
     }
   }
@@ -61,11 +59,11 @@ public class ThumbnailBranchProducer implements Producer<EncodedImage> {
     }
 
     @Override
-    protected void onNewResultImpl(EncodedImage newResult, boolean isLast) {
+    protected void onNewResultImpl(EncodedImage newResult, @Status int status) {
       if (newResult != null &&
-          (!isLast || ThumbnailSizeChecker.isImageBigEnough(newResult, mResizeOptions))) {
-        getConsumer().onNewResult(newResult, isLast);
-      } else if (isLast) {
+          (isNotLast(status) || ThumbnailSizeChecker.isImageBigEnough(newResult, mResizeOptions))) {
+        getConsumer().onNewResult(newResult, status);
+      } else if (isLast(status)) {
         EncodedImage.closeSafely(newResult);
 
         boolean fallback = produceResultsFromThumbnailProducer(
@@ -74,7 +72,7 @@ public class ThumbnailBranchProducer implements Producer<EncodedImage> {
             mProducerContext);
 
         if (!fallback) {
-          getConsumer().onNewResult(null, true);
+          getConsumer().onNewResult(null, Consumer.IS_LAST);
         }
       }
     }

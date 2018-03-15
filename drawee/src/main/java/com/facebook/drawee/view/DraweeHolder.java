@@ -1,32 +1,26 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 package com.facebook.drawee.view;
+
+import static com.facebook.drawee.components.DraweeEventTracker.Event;
 
 import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.view.MotionEvent;
 import android.view.View;
-
 import com.facebook.common.internal.Objects;
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.logging.FLog;
-import com.facebook.common.memory.MemoryUiTrimmable;
-import com.facebook.common.memory.MemoryUiTrimmableRegistry;
 import com.facebook.drawee.components.DraweeEventTracker;
 import com.facebook.drawee.drawable.VisibilityAwareDrawable;
 import com.facebook.drawee.drawable.VisibilityCallback;
 import com.facebook.drawee.interfaces.DraweeController;
 import com.facebook.drawee.interfaces.DraweeHierarchy;
-
 import javax.annotation.Nullable;
-
-import static com.facebook.drawee.components.DraweeEventTracker.Event;
 
 /**
  * A holder class for Drawee controller and hierarchy.
@@ -46,12 +40,11 @@ import static com.facebook.drawee.components.DraweeEventTracker.Event;
  * {@link View#onAttachedToWindow()} methods.
  */
 public class DraweeHolder<DH extends DraweeHierarchy>
-    implements VisibilityCallback, MemoryUiTrimmable {
+    implements VisibilityCallback {
 
   private boolean mIsControllerAttached = false;
   private boolean mIsHolderAttached = false;
   private boolean mIsVisible = true;
-  private boolean mTrimmed = false;
   private DH mHierarchy;
 
   private DraweeController mController = null;
@@ -69,7 +62,6 @@ public class DraweeHolder<DH extends DraweeHierarchy>
       Context context) {
     DraweeHolder<DH> holder = new DraweeHolder<DH>(hierarchy);
     holder.registerWithContext(context);
-    MemoryUiTrimmableRegistry.registerUiTrimmable(holder);
     return holder;
   }
 
@@ -123,27 +115,13 @@ public class DraweeHolder<DH extends DraweeHierarchy>
     attachOrDetachController();
   }
 
-  @Override
-  public void trim() {
-    mEventTracker.recordEvent(Event.ON_HOLDER_TRIM);
-    mTrimmed = true;
-    attachOrDetachController();
-  }
-
-  @Override
-  public void untrim() {
-    mEventTracker.recordEvent(Event.ON_HOLDER_UNTRIM);
-    mTrimmed = false;
-    attachOrDetachController();
-  }
-
   /**
    * Forwards the touch event to the controller.
    * @param event touch event to handle
    * @return whether the event was handled or not
    */
   public boolean onTouchEvent(MotionEvent event) {
-    if (mController == null) {
+    if (!isControllerValid()) {
       return false;
     }
     return mController.onTouchEvent(event);
@@ -171,18 +149,16 @@ public class DraweeHolder<DH extends DraweeHierarchy>
     if (mIsControllerAttached) {
       return;
     }
-    // trimming events are not guaranteed to arrive before the draw
-    if (!mTrimmed) {
-      // something went wrong here; controller is not attached, yet the hierarchy has to be drawn
-      // log error and attach the controller
-      FLog.wtf(
-          DraweeEventTracker.class,
-          "%x: Draw requested for a non-attached controller %x. %s",
-          System.identityHashCode(this),
-          System.identityHashCode(mController),
-          toString());
-    }
-    mTrimmed = false;
+
+    // something went wrong here; controller is not attached, yet the hierarchy has to be drawn
+    // log error and attach the controller
+    FLog.w(
+        DraweeEventTracker.class,
+        "%x: Draw requested for a non-attached controller %x. %s",
+        System.identityHashCode(this),
+        System.identityHashCode(mController),
+        toString());
+
     mIsHolderAttached = true;
     mIsVisible = true;
     attachOrDetachController();
@@ -208,7 +184,7 @@ public class DraweeHolder<DH extends DraweeHierarchy>
     }
 
     // Clear the old controller
-    if (mController != null) {
+    if (isControllerValid()) {
       mEventTracker.recordEvent(Event.ON_CLEAR_OLD_CONTROLLER);
       mController.setHierarchy(null);
     }
@@ -237,12 +213,15 @@ public class DraweeHolder<DH extends DraweeHierarchy>
    */
   public void setHierarchy(DH hierarchy) {
     mEventTracker.recordEvent(Event.ON_SET_HIERARCHY);
+    final boolean isControllerValid = isControllerValid();
+
     setVisibilityCallback(null);
     mHierarchy = Preconditions.checkNotNull(hierarchy);
     Drawable drawable = mHierarchy.getTopLevelDrawable();
     onVisibilityChange(drawable == null || drawable.isVisible());
     setVisibilityCallback(this);
-    if (mController != null) {
+
+    if (isControllerValid) {
       mController.setHierarchy(hierarchy);
     }
   }
@@ -290,13 +269,13 @@ public class DraweeHolder<DH extends DraweeHierarchy>
     }
     mEventTracker.recordEvent(Event.ON_DETACH_CONTROLLER);
     mIsControllerAttached = false;
-    if (mController != null) {
+    if (isControllerValid()) {
       mController.onDetach();
     }
   }
 
   private void attachOrDetachController() {
-    if (mIsHolderAttached && mIsVisible && !mTrimmed) {
+    if (mIsHolderAttached && mIsVisible) {
       attachController();
     } else {
       detachController();
@@ -309,8 +288,11 @@ public class DraweeHolder<DH extends DraweeHierarchy>
         .add("controllerAttached", mIsControllerAttached)
         .add("holderAttached", mIsHolderAttached)
         .add("drawableVisible", mIsVisible)
-        .add("trimmed", mTrimmed)
         .add("events", mEventTracker.toString())
         .toString();
+  }
+
+  private boolean isControllerValid() {
+    return mController != null && mController.getHierarchy() == mHierarchy;
   }
 }

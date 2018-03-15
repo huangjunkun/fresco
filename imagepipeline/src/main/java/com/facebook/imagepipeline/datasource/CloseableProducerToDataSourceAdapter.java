@@ -1,22 +1,19 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.datasource;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.ThreadSafe;
-
 import com.facebook.common.references.CloseableReference;
 import com.facebook.datasource.DataSource;
+import com.facebook.imagepipeline.listener.RequestListener;
 import com.facebook.imagepipeline.producers.Producer;
 import com.facebook.imagepipeline.producers.SettableProducerContext;
-import com.facebook.imagepipeline.listener.RequestListener;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * DataSource<CloseableReference<T>> backed by a Producer<CloseableReference<T>>
@@ -54,7 +51,7 @@ public class CloseableProducerToDataSourceAdapter<T>
   }
 
   @Override
-  protected void onNewResultImpl(CloseableReference<T> result, boolean isLast) {
-    super.onNewResultImpl(CloseableReference.cloneOrNull(result), isLast);
+  protected void onNewResultImpl(CloseableReference<T> result, int status) {
+    super.onNewResultImpl(CloseableReference.cloneOrNull(result), status);
   }
 }

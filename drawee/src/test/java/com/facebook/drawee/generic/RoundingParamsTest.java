@@ -1,23 +1,19 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.generic;
 
+import static org.junit.Assert.*;
+
 import android.graphics.Color;
-
-import org.robolectric.RobolectricTestRunner;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import static org.junit.Assert.*;
+import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public class RoundingParamsTest {
@@ -35,6 +31,7 @@ public class RoundingParamsTest {
     assertFalse(mRoundingParams.getRoundAsCircle());
     assertNull(mRoundingParams.getCornersRadii());
     assertEquals(0, mRoundingParams.getOverlayColor());
+    assertFalse(mRoundingParams.getScaleDownInsideBorders());
   }
 
   @Test
@@ -80,6 +77,14 @@ public class RoundingParamsTest {
     mRoundingParams.setBorder(borderColor, borderWidth);
     assertEquals(borderColor, mRoundingParams.getBorderColor());
     assertEquals(borderWidth, mRoundingParams.getBorderWidth(), 0);
+  }
+
+  @Test
+  public void testSetScaleDownInsideBorders() {
+    assertSame(mRoundingParams, mRoundingParams.setScaleDownInsideBorders(true));
+    assertTrue(mRoundingParams.getScaleDownInsideBorders());
+    assertSame(mRoundingParams, mRoundingParams.setScaleDownInsideBorders(false));
+    assertFalse(mRoundingParams.getScaleDownInsideBorders());
   }
 
   @Test

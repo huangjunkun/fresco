@@ -12,12 +12,13 @@
 package com.facebook.samples.scrollperf.util;
 
 import android.content.Context;
-import android.graphics.Color;
-
+import android.content.res.Resources;
+import android.view.View;
 import com.facebook.drawee.drawable.ScalingUtils;
 import com.facebook.drawee.generic.GenericDraweeHierarchy;
 import com.facebook.drawee.generic.GenericDraweeHierarchyBuilder;
 import com.facebook.drawee.generic.RoundingParams;
+import com.facebook.samples.scrollperf.R;
 import com.facebook.samples.scrollperf.conf.Config;
 import com.facebook.samples.scrollperf.conf.Const;
 
@@ -38,18 +39,28 @@ public final class DraweeUtil {
           final Config config) {
     GenericDraweeHierarchyBuilder builder =
             new GenericDraweeHierarchyBuilder(context.getResources())
+            .setFadeDuration(config.fadeDurationMs)
             .setPlaceholderImage(Const.PLACEHOLDER)
             .setFailureImage(Const.FAILURE)
             .setActualImageScaleType(ScalingUtils.ScaleType.FIT_CENTER);
     applyScaleType(builder, config);
-    if (config.useRoundedCorners) {
-      // Will add conf params later about this
-      final RoundingParams roundingParams = new RoundingParams()
-              .setRoundingMethod(RoundingParams.RoundingMethod.BITMAP_ONLY)
-              .setBorderColor(Color.RED)
-              .setBorderWidth(2.0f)
-              .setCornersRadius(80.0f);
-      roundingParams.setRoundAsCircle(config.useRoundedAsCircle);
+
+    if (config.useRoundedCorners || config.drawBorder) {
+      final Resources res = context.getResources();
+      final RoundingParams roundingParams = new RoundingParams();
+
+      if (config.useRoundedCorners) {
+        roundingParams.setRoundingMethod(RoundingParams.RoundingMethod.BITMAP_ONLY);
+        roundingParams.setCornersRadius(res.getDimensionPixelSize(R.dimen.drawee_corner_radius));
+        roundingParams.setRoundAsCircle(config.useRoundedAsCircle);
+      }
+
+      if (config.drawBorder) {
+        //noinspection deprecation
+        roundingParams.setBorderColor(res.getColor(R.color.colorPrimary));
+        roundingParams.setBorderWidth(res.getDimensionPixelSize(R.dimen.drawee_border_width));
+      }
+
       builder.setRoundingParams(roundingParams);
     }
     return builder.build();
@@ -82,5 +93,16 @@ public final class DraweeUtil {
         builder.setActualImageScaleType(ScalingUtils.ScaleType.FIT_XY);
         break;
     }
+  }
+
+  /**
+   * Utility method which set the bgColor based on configuration values
+   * @param view The View to change the bgColor to
+   * @param config The Config object
+   */
+  public static void setBgColor(View view, final Config config) {
+    int[] colors = view.getContext().getResources().getIntArray(R.array.bg_colors);
+    final int bgColor = colors[config.bgColor];
+    view.setBackgroundColor(bgColor);
   }
 }

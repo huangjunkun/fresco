@@ -1,14 +1,13 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.cache.common;
 
+import android.net.Uri;
 import javax.annotation.Nullable;
 
 /**
@@ -18,14 +17,23 @@ import javax.annotation.Nullable;
 public class DebuggingCacheKey extends SimpleCacheKey {
 
   private final Object mCallerContext;
+  private final Uri mSourceUri;
 
-  public DebuggingCacheKey(String key, @Nullable Object callerContext) {
+  public DebuggingCacheKey(String key, @Nullable Object callerContext, Uri sourceUri) {
     super(key);
     mCallerContext = callerContext;
+    mSourceUri = sourceUri;
   }
 
   @Nullable
   public Object getCallerContext() {
     return mCallerContext;
+  }
+
+  /**
+   * Original URI the image was fetched from.
+   */
+  public Uri getSourceUri() {
+    return mSourceUri;
   }
 }

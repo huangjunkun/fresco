@@ -12,17 +12,16 @@
 
 package com.facebook.samples.zoomable;
 
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-
 import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.RectF;
 import android.support.annotation.IntDef;
+import android.support.annotation.Nullable;
 import android.view.MotionEvent;
-
 import com.facebook.common.logging.FLog;
 import com.facebook.samples.gestures.TransformGestureDetector;
+import java.lang.annotation.Retention;
+import java.lang.annotation.RetentionPolicy;
 
 /**
  * Zoomable controller that calculates transformation based on touch events.
@@ -46,13 +45,15 @@ public class DefaultZoomableController
   public static final int LIMIT_SCALE = 4;
   public static final int LIMIT_ALL = LIMIT_TRANSLATION_X | LIMIT_TRANSLATION_Y | LIMIT_SCALE;
 
+  private static final float EPS = 1e-3f;
+
   private static final Class<?> TAG = DefaultZoomableController.class;
 
   private static final RectF IDENTITY_RECT = new RectF(0, 0, 1, 1);
 
   private TransformGestureDetector mGestureDetector;
 
-  private Listener mListener = null;
+  private @Nullable Listener mListener = null;
 
   private boolean mIsEnabled = false;
   private boolean mIsRotationEnabled = false;
@@ -74,7 +75,7 @@ public class DefaultZoomableController
   private final Matrix mActiveTransformInverse = new Matrix();
   private final float[] mTempValues = new float[9];
   private final RectF mTempRect = new RectF();
-  private boolean mWasTransformedWithoutCorrection;
+  private boolean mWasTransformCorrected;
 
   public static DefaultZoomableController newInstance() {
     return new DefaultZoomableController(TransformGestureDetector.newInstance());
@@ -223,7 +224,7 @@ public class DefaultZoomableController
    */
   @Override
   public boolean wasTransformCorrected() {
-    return !mWasTransformedWithoutCorrection;
+    return mWasTransformCorrected;
   }
 
   /**
@@ -377,8 +378,12 @@ public class DefaultZoomableController
   public void onGestureBegin(TransformGestureDetector detector) {
     FLog.v(TAG, "onGestureBegin");
     mPreviousTransform.set(mActiveTransform);
-    // We started the gesture, but no transformation occurred just yet.
-    mWasTransformedWithoutCorrection = false;
+    onTransformBegin();
+    // We only received a touch down event so far, and so we don't know yet in which direction a
+    // future move event will follow. Therefore, if we can't scroll in all directions, we have to
+    // assume the worst case where the user tries to scroll out of edge, which would cause
+    // transformation to be corrected.
+    mWasTransformCorrected = !canScrollInAllDirection();
   }
 
   @Override
@@ -390,12 +395,13 @@ public class DefaultZoomableController
       mGestureDetector.restartGesture();
     }
     // A transformation happened, but was it without correction?
-    mWasTransformedWithoutCorrection = !transformCorrected;
+    mWasTransformCorrected = transformCorrected;
   }
 
   @Override
   public void onGestureEnd(TransformGestureDetector detector) {
     FLog.v(TAG, "onGestureEnd");
+    onTransformEnd();
   }
 
   /**
@@ -428,10 +434,22 @@ public class DefaultZoomableController
     return transformCorrected;
   }
 
+  private void onTransformBegin() {
+    if (mListener != null && isEnabled()) {
+      mListener.onTransformBegin(mActiveTransform);
+    }
+  }
+
   private void onTransformChanged() {
     mActiveTransform.mapRect(mTransformedImageBounds, mImageBounds);
     if (mListener != null && isEnabled()) {
       mListener.onTransformChanged(mActiveTransform);
+    }
+  }
+
+  private void onTransformEnd() {
+    if (mListener != null && isEnabled()) {
+      mListener.onTransformEnd(mActiveTransform);
     }
   }
 
@@ -576,5 +594,44 @@ public class DefaultZoomableController
       }
     }
     return true;
+  }
+
+  /**
+   * Returns whether the scroll can happen in all directions. I.e. the image is not on any edge.
+   */
+  private boolean canScrollInAllDirection() {
+    return mTransformedImageBounds.left < mViewBounds.left - EPS &&
+        mTransformedImageBounds.top < mViewBounds.top - EPS &&
+        mTransformedImageBounds.right > mViewBounds.right + EPS &&
+        mTransformedImageBounds.bottom > mViewBounds.bottom + EPS;
+  }
+
+  @Override
+  public int computeHorizontalScrollRange() {
+    return (int)mTransformedImageBounds.width();
+  }
+  @Override
+  public int computeHorizontalScrollOffset() {
+    return (int)(mViewBounds.left - mTransformedImageBounds.left);
+  }
+  @Override
+  public int computeHorizontalScrollExtent() {
+    return (int)mViewBounds.width();
+  }
+  @Override
+  public int computeVerticalScrollRange() {
+    return (int)mTransformedImageBounds.height();
+  }
+  @Override
+  public int computeVerticalScrollOffset() {
+    return (int)(mViewBounds.top - mTransformedImageBounds.top);
+  }
+  @Override
+  public int computeVerticalScrollExtent() {
+    return (int)mViewBounds.height();
+  }
+
+  public Listener getListener() {
+    return mListener;
   }
 }

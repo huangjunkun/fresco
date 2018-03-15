@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <jni.h>
@@ -15,6 +13,8 @@
 #include "logging.h"
 #include "JpegTranscoder.h"
 #include "NativeMemoryChunk.h"
+#include "blur_filter.h"
+#include "rounding_filter.h"
 
 jmethodID midInputStreamRead;
 jmethodID midInputStreamSkip;
@@ -33,7 +33,7 @@ jclass jRuntimeException_class;
  * <p> In case of method registration failure a RuntimeException is thrown.
  */
 __attribute__((visibility("default")))
-JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void*) {
   JNIEnv* env;
 
   if (vm->GetEnv(reinterpret_cast<void**>(&env), JNI_VERSION_1_6) != JNI_OK) {
@@ -94,6 +94,16 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
   THROW_AND_RETURNVAL_IF(
       registerNativeMemoryChunkMethods(env) == JNI_ERR,
       "Could not register NativeMemoryChunk methods",
+      -1);
+
+  THROW_AND_RETURNVAL_IF(
+      registerBlurFilterMethods(env) == JNI_ERR,
+      "Could not register NativeBlurFilter methods",
+      -1);
+
+  THROW_AND_RETURNVAL_IF(
+      registerRoundingFilterMethods(env) == JNI_ERR,
+      "Could not register NativeRoundingFilter methods",
       -1);
 
   return JNI_VERSION_1_6;

@@ -1,32 +1,35 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.memory;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.verify;
+
 import android.graphics.Bitmap;
 import android.graphics.Bitmap.Config;
-
-import com.facebook.common.soloader.SoLoaderShim;
 import com.facebook.imagepipeline.testing.MockBitmapFactory;
 import com.facebook.imageutils.BitmapUtil;
-
-import org.junit.*;
-import org.junit.runner.*;
-import org.mockito.*;
+import com.facebook.soloader.SoLoader;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.Answers;
 import org.mockito.Mock;
-import org.mockito.invocation.*;
-import org.mockito.stubbing.*;
-import org.powermock.core.classloader.annotations.*;
-import org.robolectric.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import org.mockito.MockitoAnnotations;
+import org.mockito.invocation.InvocationOnMock;
+import org.mockito.stubbing.Answer;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.robolectric.RobolectricTestRunner;
 
 /**
  Basic tests for BitmapPool */
@@ -36,7 +39,7 @@ import static org.mockito.Mockito.*;
 public class BitmapPoolTest {
 
   static {
-    SoLoaderShim.setInTestMode();
+    SoLoader.setInTestMode();
   }
 
   @Mock(answer = Answers.CALLS_REAL_METHODS)

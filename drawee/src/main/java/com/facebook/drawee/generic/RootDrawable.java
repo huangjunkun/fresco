@@ -1,23 +1,19 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 package com.facebook.drawee.generic;
-
-import javax.annotation.Nullable;
 
 import android.annotation.SuppressLint;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
-
 import com.facebook.common.internal.VisibleForTesting;
 import com.facebook.drawee.drawable.ForwardingDrawable;
 import com.facebook.drawee.drawable.VisibilityAwareDrawable;
 import com.facebook.drawee.drawable.VisibilityCallback;
+import javax.annotation.Nullable;
 
 /**
  * The root drawable of a DraweeHierarchy.

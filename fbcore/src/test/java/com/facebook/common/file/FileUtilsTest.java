@@ -1,21 +1,19 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.common.file;
 
-import java.io.File;
-
-import org.junit.Test;
-
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+
+import java.io.File;
+import org.junit.Test;
 
 /**
  * Unit tests for {@link FileUtils}
@@ -30,7 +28,7 @@ public class FileUtilsTest {
     try {
       FileUtils.mkdirs(directory);
     } catch (FileUtils.CreateDirectoryException cde) {
-      assertTrue(false);
+      fail();
     }
   }
 
@@ -43,7 +41,7 @@ public class FileUtilsTest {
     try {
       FileUtils.mkdirs(directory);
     } catch (FileUtils.CreateDirectoryException cde) {
-      assertTrue(false);
+      fail();
     }
   }
 
@@ -55,7 +53,7 @@ public class FileUtilsTest {
     when(directory.delete()).thenReturn(false);
     try {
       FileUtils.mkdirs(directory);
-      assertTrue(false);
+      fail();
     } catch (FileUtils.CreateDirectoryException cde) {
       assertTrue(cde.getCause() instanceof FileUtils.FileDeleteException);
     }
@@ -71,7 +69,7 @@ public class FileUtilsTest {
     try {
       FileUtils.rename(sourceFile, targetFile);
     } catch (FileUtils.RenameException re) {
-      assertTrue(false);
+      fail();
     }
   }
 
@@ -87,7 +85,7 @@ public class FileUtilsTest {
 
     try {
       FileUtils.rename(sourceFile, targetFile);
-      assertTrue(false);
+      fail();
     } catch (FileUtils.RenameException re) {
       assertTrue(re.getCause() instanceof FileUtils.ParentDirNotFoundException);
     }

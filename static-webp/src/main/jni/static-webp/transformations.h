@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 #ifndef TRANSFORMATIONS_H
 #define TRANSFORMATIONS_H
@@ -19,12 +17,26 @@ namespace imagepipeline {
 /**
  * Rotation types.
  */
-enum class RotationType { ROTATE_0, ROTATE_90, ROTATE_180, ROTATE_270 };
+enum class RotationType {
+  ROTATE_0,
+  ROTATE_90,
+  ROTATE_180,
+  ROTATE_270,
+  FLIP_HORIZONTAL,
+  FLIP_VERTICAL,
+  TRANSPOSE,
+  TRANSVERSE
+};
 
 /**
  * Transforms degrees into RotationType
  */
 RotationType getRotationTypeFromDegrees(JNIEnv* env, uint16_t degrees);
+
+/**
+ * Transforms raw EXIF orientation values into RotationType
+ */
+RotationType getRotationTypeFromRawExifOrientation(JNIEnv* env, uint16_t exif_orientation);
 
 /**
  * Scale factor to be used for resizing.

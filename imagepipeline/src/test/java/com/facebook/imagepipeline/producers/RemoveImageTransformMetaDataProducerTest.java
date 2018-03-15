@@ -1,18 +1,20 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
+import static org.junit.Assert.*;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+
+import com.facebook.common.memory.PooledByteBuffer;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
@@ -20,11 +22,6 @@ import org.mockito.invocation.*;
 import org.mockito.stubbing.*;
 import org.robolectric.*;
 import org.robolectric.annotation.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest= Config.NONE)
@@ -69,18 +66,18 @@ public class RemoveImageTransformMetaDataProducerTest {
   public void testOnNewResult() {
     when(mEncodedImage.getByteBufferRef()).thenReturn(mIntermediateResult);
     when(mEncodedImage.isValid()).thenReturn(true);
-    mRemoveMetaDataConsumer.onNewResult(mEncodedImage, false);
+    mRemoveMetaDataConsumer.onNewResult(mEncodedImage, Consumer.NO_FLAGS);
     ArgumentCaptor<CloseableReference> argumentCaptor =
         ArgumentCaptor.forClass(CloseableReference.class);
-    verify(mConsumer).onNewResult(argumentCaptor.capture(), eq(false));
+    verify(mConsumer).onNewResult(argumentCaptor.capture(), eq(Consumer.NO_FLAGS));
     CloseableReference intermediateResult = argumentCaptor.getValue();
     assertEquals(
         mIntermediateResult.getUnderlyingReferenceTestOnly().getRefCountTestOnly(),
         intermediateResult.getUnderlyingReferenceTestOnly().getRefCountTestOnly());
 
     when(mEncodedImage.getByteBufferRef()).thenReturn(mFinalResult);
-    mRemoveMetaDataConsumer.onNewResult(mEncodedImage, true);
-    verify(mConsumer).onNewResult(argumentCaptor.capture(), eq(false));
+    mRemoveMetaDataConsumer.onNewResult(mEncodedImage, Consumer.IS_LAST);
+    verify(mConsumer).onNewResult(argumentCaptor.capture(), eq(Consumer.NO_FLAGS));
     CloseableReference finalResult = argumentCaptor.getValue();
     assertEquals(
         mFinalResult.getUnderlyingReferenceTestOnly().getRefCountTestOnly(),
@@ -89,8 +86,8 @@ public class RemoveImageTransformMetaDataProducerTest {
 
   @Test
   public void testOnNullResult() {
-    mRemoveMetaDataConsumer.onNewResult(null, false);
-    verify(mConsumer).onNewResult(null, false);
+    mRemoveMetaDataConsumer.onNewResult(null, Consumer.NO_FLAGS);
+    verify(mConsumer).onNewResult(null, Consumer.NO_FLAGS);
   }
 
   @Test

@@ -1,14 +1,25 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.webpsupport;
 
+import android.app.Instrumentation;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Rect;
+import android.os.Build;
+import android.os.Environment;
+import android.support.test.InstrumentationRegistry;
+import android.support.test.runner.AndroidJUnit4;
+import android.test.InstrumentationTestCase;
+import com.facebook.common.internal.ByteStreams;
+import com.facebook.common.internal.Throwables;
+import com.facebook.imagepipeline.core.ImagePipelineConfig;
+import com.facebook.imagepipeline.core.ImagePipelineFactory;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileInputStream;
@@ -16,21 +27,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.Override;
-
-import android.app.Instrumentation;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Rect;
-import android.os.Environment;
-import android.support.test.InstrumentationRegistry;
-import android.support.test.runner.AndroidJUnit4;
-import android.test.InstrumentationTestCase;
-import android.os.Build;
-
-import com.facebook.common.internal.ByteStreams;
-import com.facebook.common.internal.Throwables;
-
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -39,10 +35,17 @@ import org.junit.runner.RunWith;
 public class WebpBitmapFactoryTest extends InstrumentationTestCase {
   private Instrumentation mInstrumentation;
 
+  private WebpBitmapFactoryImpl mWebpBitmapFactory;
+
   @Override
   @Before
   public void setUp() {
     mInstrumentation = InstrumentationRegistry.getInstrumentation();
+    mWebpBitmapFactory = new WebpBitmapFactoryImpl();
+    ImagePipelineConfig.Builder configBuilder =
+        ImagePipelineConfig.newBuilder(mInstrumentation.getContext())
+            .experiment().setWebpBitmapFactory(mWebpBitmapFactory);
+    ImagePipelineFactory.initialize(configBuilder.build());
   }
 
   private FileDescriptor getImageFileDescriptor(String path) {
@@ -84,7 +87,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
 
   @Test
   public void testJpegFallback() throws Throwable {
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestJpegInputStream(),
         null,
         null);
@@ -101,7 +104,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
 
   @Test
   public void testWebpDecodeStream() throws Throwable {
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         null);
@@ -124,7 +127,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     BitmapFactory.Options options = new BitmapFactory.Options();
     options.inJustDecodeBounds = true;
 
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -144,7 +147,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     BitmapFactory.Options options = new BitmapFactory.Options();
     options.inBitmap = inBitmap;
 
-    final Bitmap outBitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap outBitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -157,7 +160,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
   @Test
   public void testByteArrayDecode() throws Throwable {
     byte[] data = ByteStreams.toByteArray(getTestWebpInputStream());
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeByteArray(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeByteArray(
         data,
         0,
         data.length,
@@ -184,7 +187,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     BitmapFactory.Options options = new BitmapFactory.Options();
     options.inTempStorage = new byte[128 * 1024];
 
-    Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -196,7 +199,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     BitmapFactory.Options options = new BitmapFactory.Options();
     options.inSampleSize = 2;
 
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -208,7 +211,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
   public void testOutWidthHeight() throws Throwable {
     BitmapFactory.Options options = new BitmapFactory.Options();
 
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -222,7 +225,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
   public void testOutPadding() throws Throwable {
     Rect outPadding = new Rect();
 
-    WebpBitmapFactoryImpl.hookDecodeStream(
+    mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         outPadding,
         null);
@@ -237,7 +240,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
   @Test
   public void testWebpFileDescriptorDecode() throws Throwable {
     FileDescriptor fd = getImageFileDescriptor("redsquare.webp");
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeFileDescriptor(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeFileDescriptor(
         fd,
         null,
         null);
@@ -248,7 +251,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
   @Test
   public void testJpegFileDescriptorDecode() throws Throwable {
     FileDescriptor fd = getImageFileDescriptor("redsquare.jpg");
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeFileDescriptor(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeFileDescriptor(
         fd,
         null,
         null);
@@ -264,7 +267,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     options.inDensity = 480;
     options.inTargetDensity = 240;
 
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -280,7 +283,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     options.inDensity = 480;
     options.inTargetDensity = 240;
 
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);
@@ -296,7 +299,7 @@ public class WebpBitmapFactoryTest extends InstrumentationTestCase {
     options.inDensity = 0;
     options.inTargetDensity = 240;
 
-    final Bitmap bitmap = WebpBitmapFactoryImpl.hookDecodeStream(
+    final Bitmap bitmap = mWebpBitmapFactory.decodeStream(
         getTestWebpInputStream(),
         null,
         options);

@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.components;
@@ -43,8 +41,6 @@ public class DraweeEventTracker {
     ON_DATASOURCE_FAILURE_INT,
     ON_HOLDER_ATTACH,
     ON_HOLDER_DETACH,
-    ON_HOLDER_TRIM,
-    ON_HOLDER_UNTRIM,
     ON_DRAWABLE_SHOW,
     ON_DRAWABLE_HIDE,
     ON_ACTIVITY_START,

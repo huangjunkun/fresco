@@ -1,22 +1,18 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.memory;
 
-import javax.annotation.concurrent.ThreadSafe;
-
 import android.annotation.TargetApi;
 import android.graphics.Bitmap;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.memory.MemoryTrimmableRegistry;
 import com.facebook.imageutils.BitmapUtil;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Manages a pool of bitmaps. This allows us to reuse bitmaps instead of constantly allocating
@@ -45,7 +41,7 @@ public class BitmapPool extends BasePool<Bitmap> {
   }
 
   /**
-   * Allocate a bitmap that has a backing memory allocacation of 'size' bytes.
+   * Allocate a bitmap that has a backing memory allocation of 'size' bytes.
    * This is configuration agnostic so the size is the actual size in bytes of the bitmap.
    * @param size the 'size' in bytes of the bitmap
    * @return a new bitmap with the specified size in memory

@@ -1,13 +1,15 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.common;
+
+import android.graphics.Bitmap;
+import com.facebook.imagepipeline.decoder.ImageDecoder;
+import javax.annotation.Nullable;
 
 /**
  * Builder for {@link ImageDecodeOptions}.
@@ -19,6 +21,8 @@ public class ImageDecodeOptionsBuilder {
   private boolean mUseLastFrameForPreview;
   private boolean mDecodeAllFrames;
   private boolean mForceStaticImage;
+  private Bitmap.Config mBitmapConfig = Bitmap.Config.ARGB_8888;
+  private @Nullable ImageDecoder mCustomImageDecoder;
 
   public ImageDecodeOptionsBuilder() {
   }
@@ -34,6 +38,8 @@ public class ImageDecodeOptionsBuilder {
     mUseLastFrameForPreview = options.useLastFrameForPreview;
     mDecodeAllFrames = options.decodeAllFrames;
     mForceStaticImage = options.forceStaticImage;
+    mBitmapConfig = options.bitmapConfig;
+    mCustomImageDecoder = options.customImageDecoder;
     return this;
   }
 
@@ -136,12 +142,54 @@ public class ImageDecodeOptionsBuilder {
   }
 
   /**
+   * Set a custom image decoder override to be used for the given image.
+   * This will bypass all default decoders and only use the provided custom image decoder
+   * for the given image.
+   *
+   * @param customImageDecoder the custom decoder to use
+   * @return this builder
+   */
+  public ImageDecodeOptionsBuilder setCustomImageDecoder(
+      @Nullable ImageDecoder customImageDecoder) {
+    mCustomImageDecoder = customImageDecoder;
+    return this;
+  }
+
+  /**
+   * Get the custom image decoder, if one has been set.
+   *
+   * @return the custom image decoder or null if not set
+   */
+  @Nullable
+  public ImageDecoder getCustomImageDecoder() {
+    return mCustomImageDecoder;
+  }
+
+  /**
    * Gets whether to force animated image formats to be decoded as static, non-animated images.
    *
    * @return whether to force animated image formats to be decoded as static
    */
   public boolean getForceStaticImage() {
     return mForceStaticImage;
+  }
+
+  /**
+   * Gets which config image will be decode with;
+   *
+   * @return which config image will be decode with
+   */
+  public Bitmap.Config getBitmapConfig() {
+    return mBitmapConfig;
+  }
+
+  /**
+   * Sets which config static image will be decode with;
+   * @param bitmapConfig which config static image will be decode with;
+   */
+  public ImageDecodeOptionsBuilder setBitmapConfig(Bitmap.Config bitmapConfig) {
+    mBitmapConfig = bitmapConfig;
+    return this;
   }
 
   /**

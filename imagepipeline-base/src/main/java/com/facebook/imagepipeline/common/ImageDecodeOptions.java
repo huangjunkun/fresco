@@ -1,17 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.common;
 
-import javax.annotation.concurrent.Immutable;
-
+import android.graphics.Bitmap;
+import com.facebook.imagepipeline.decoder.ImageDecoder;
 import java.util.Locale;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.Immutable;
 
 /**
  * Options for changing the behavior of the {@code ImageDecoder}.
@@ -50,12 +50,24 @@ public class ImageDecodeOptions {
    */
   public final boolean forceStaticImage;
 
+  /**
+   * StaticImage and JPEG will decode with this config;
+   */
+  public final Bitmap.Config bitmapConfig;
+
+  /**
+   * Custom image decoder override.
+   */
+  public final @Nullable ImageDecoder customImageDecoder;
+
   public ImageDecodeOptions(ImageDecodeOptionsBuilder b) {
     this.minDecodeIntervalMs = b.getMinDecodeIntervalMs();
     this.decodePreviewFrame = b.getDecodePreviewFrame();
     this.useLastFrameForPreview = b.getUseLastFrameForPreview();
     this.decodeAllFrames = b.getDecodeAllFrames();
     this.forceStaticImage = b.getForceStaticImage();
+    this.bitmapConfig = b.getBitmapConfig();
+    this.customImageDecoder = b.getCustomImageDecoder();
   }
 
   /**
@@ -87,7 +99,8 @@ public class ImageDecodeOptions {
     if (useLastFrameForPreview != that.useLastFrameForPreview) return false;
     if (decodeAllFrames != that.decodeAllFrames) return false;
     if (forceStaticImage != that.forceStaticImage) return false;
-
+    if (bitmapConfig != that.bitmapConfig) return false;
+    if (customImageDecoder != that.customImageDecoder) return false;
     return true;
   }
 
@@ -98,6 +111,8 @@ public class ImageDecodeOptions {
     result = 31 * result + (useLastFrameForPreview ? 1 : 0);
     result = 31 * result + (decodeAllFrames ? 1 : 0);
     result = 31 * result + (forceStaticImage ? 1 : 0);
+    result = 31 * result + bitmapConfig.ordinal();
+    result = 31 * result + (customImageDecoder != null ? customImageDecoder.hashCode() : 0);
     return result;
   }
 
@@ -105,11 +120,13 @@ public class ImageDecodeOptions {
   public String toString() {
     return String.format(
         (Locale) null,
-        "%d-%b-%b-%b-%b",
+        "%d-%b-%b-%b-%b-%s-%s",
         minDecodeIntervalMs,
         decodePreviewFrame,
         useLastFrameForPreview,
         decodeAllFrames,
-        forceStaticImage);
+        forceStaticImage,
+        bitmapConfig.name(),
+        customImageDecoder);
   }
 }

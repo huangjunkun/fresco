@@ -1,26 +1,15 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.cache;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
-import javax.annotation.concurrent.ThreadSafe;
-
-import java.util.ArrayList;
-import java.util.Map;
-import java.util.WeakHashMap;
-import java.util.concurrent.TimeUnit;
-
 import android.graphics.Bitmap;
 import android.os.SystemClock;
-
+import com.android.internal.util.Predicate;
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.Supplier;
 import com.facebook.common.internal.VisibleForTesting;
@@ -29,8 +18,13 @@ import com.facebook.common.memory.MemoryTrimmable;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.common.references.ResourceReleaser;
 import com.facebook.imagepipeline.bitmaps.PlatformBitmapFactory;
-
-import com.android.internal.util.Predicate;
+import java.util.ArrayList;
+import java.util.Map;
+import java.util.WeakHashMap;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Layer of memory cache stack responsible for managing eviction of the the cached items.
@@ -362,6 +356,16 @@ public class CountingMemoryCache<K, V> implements MemoryCache<K, V>, MemoryTrimm
   @Override
   public synchronized boolean contains(Predicate<K> predicate) {
     return !mCachedEntries.getMatchingEntries(predicate).isEmpty();
+  }
+
+  /**
+   * Check if an item with the given cache key is currently in the cache.
+   *
+   * @param key returns true if an item with the given key matches
+   * @return true is any items matches from the cache
+   */
+  public synchronized boolean contains(K key) {
+    return mCachedEntries.contains(key);
   }
 
   /** Trims the cache according to the specified trimming strategy and the given trim type. */

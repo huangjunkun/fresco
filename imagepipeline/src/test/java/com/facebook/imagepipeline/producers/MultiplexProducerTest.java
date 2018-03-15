@@ -1,29 +1,11 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
-
-import com.facebook.common.references.CloseableReference;
-import com.facebook.imagepipeline.cache.BitmapMemoryCacheKey;
-import com.facebook.imagepipeline.cache.CacheKeyFactory;
-import com.facebook.imagepipeline.common.Priority;
-import com.facebook.imagepipeline.image.CloseableImage;
-import com.facebook.imagepipeline.request.ImageRequest;
-
-import org.junit.*;
-import org.junit.runner.*;
-import org.mockito.*;
-import org.mockito.invocation.*;
-import org.mockito.stubbing.*;
-
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
 
 import static junit.framework.Assert.assertEquals;
 import static junit.framework.Assert.assertFalse;
@@ -36,6 +18,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
+
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.cache.BitmapMemoryCacheKey;
+import com.facebook.imagepipeline.cache.CacheKeyFactory;
+import com.facebook.imagepipeline.common.Priority;
+import com.facebook.imagepipeline.image.CloseableImage;
+import com.facebook.imagepipeline.request.ImageRequest;
+import org.junit.*;
+import org.junit.runner.*;
+import org.mockito.*;
+import org.mockito.invocation.*;
+import org.mockito.stubbing.*;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 /**
  * Checks basic properties of the multiplex producer, that is:
@@ -50,6 +46,11 @@ import static org.mockito.Mockito.when;
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest= Config.NONE)
 public class MultiplexProducerTest {
+
+  /**
+   * An extra flag to check we maintain other flags than just whether this is the last result
+   */
+  private final @Consumer.Status int TEST_FLAG = 1 << 11;
 
   @Mock public CacheKeyFactory mCacheKeyFactory;
   @Mock public Producer mInputProducer;
@@ -154,24 +155,24 @@ public class MultiplexProducerTest {
   @Test
   public void testSingleRequest() {
     mMultiplexProducer.produceResults(mConsumer1, mProducerContext1);
-    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, false);
-    verify(mConsumer1).onNewResult(mIntermediateImageReference1, false);
-    mForwardingConsumer1.onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer1).onNewResult(mIntermediateImageReference2, false);
-    mForwardingConsumer1.onNewResult(mFinalImageReference1, true);
-    verify(mConsumer1).onNewResult(mFinalImageReference1, true);
+    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, Consumer.NO_FLAGS);
+    verify(mConsumer1).onNewResult(mIntermediateImageReference1, Consumer.NO_FLAGS);
+    mForwardingConsumer1.onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer1).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    mForwardingConsumer1.onNewResult(mFinalImageReference1, Consumer.IS_LAST);
+    verify(mConsumer1).onNewResult(mFinalImageReference1, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.isEmpty());
   }
 
   @Test
   public void testNewRequestGetsIntermediateResult() {
     mMultiplexProducer.produceResults(mConsumer1, mProducerContext1);
-    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, false);
-    mForwardingConsumer1.onNewResult(mIntermediateImageReference2, false);
+    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, Consumer.NO_FLAGS);
+    mForwardingConsumer1.onNewResult(mIntermediateImageReference2, TEST_FLAG);
     ArgumentCaptor<CloseableReference> imageReferenceCaptor =
         ArgumentCaptor.forClass(CloseableReference.class);
     mMultiplexProducer.produceResults(mConsumer2, mProducerContext2);
-    verify(mConsumer2).onNewResult(imageReferenceCaptor.capture(), eq(false));
+    verify(mConsumer2).onNewResult(imageReferenceCaptor.capture(), eq(TEST_FLAG));
     assertEquals(
         imageReferenceCaptor.getValue().getUnderlyingReferenceTestOnly(),
         mIntermediateImageReference2.getUnderlyingReferenceTestOnly());
@@ -181,27 +182,27 @@ public class MultiplexProducerTest {
   public void testTwoIdenticalRequestAndOneDifferent() {
     mMultiplexProducer.produceResults(mConsumer1, mProducerContext1);
     mMultiplexProducer.produceResults(mConsumer2, mProducerContext2);
-    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, false);
+    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, Consumer.NO_FLAGS);
 
     mMultiplexProducer.produceResults(mConsumer3, mProducerContext3);
-    verify(mConsumer3, never()).onNewResult(mIntermediateImageReference1, false);
+    verify(mConsumer3, never()).onNewResult(mIntermediateImageReference1, Consumer.NO_FLAGS);
 
-    mForwardingConsumer2.onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer3).onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer1, never()).onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer2, never()).onNewResult(mIntermediateImageReference2, false);
+    mForwardingConsumer2.onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer3).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer1, never()).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer2, never()).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
     assertTrue(mMultiplexProducer.mMultiplexers.size() == 2);
 
-    mForwardingConsumer1.onNewResult(mFinalImageReference1, true);
-    verify(mConsumer1).onNewResult(mFinalImageReference1, true);
-    verify(mConsumer2).onNewResult(mFinalImageReference1, true);
-    verify(mConsumer3, never()).onNewResult(mFinalImageReference1, true);
+    mForwardingConsumer1.onNewResult(mFinalImageReference1, Consumer.IS_LAST);
+    verify(mConsumer1).onNewResult(mFinalImageReference1, Consumer.IS_LAST);
+    verify(mConsumer2).onNewResult(mFinalImageReference1, Consumer.IS_LAST);
+    verify(mConsumer3, never()).onNewResult(mFinalImageReference1, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.size() == 1);
 
-    mForwardingConsumer2.onNewResult(mFinalImageReference2, true);
-    verify(mConsumer3).onNewResult(mFinalImageReference2, true);
-    verify(mConsumer1, never()).onNewResult(mFinalImageReference2, true);
-    verify(mConsumer2, never()).onNewResult(mFinalImageReference2, true);
+    mForwardingConsumer2.onNewResult(mFinalImageReference2, Consumer.IS_LAST);
+    verify(mConsumer3).onNewResult(mFinalImageReference2, Consumer.IS_LAST);
+    verify(mConsumer1, never()).onNewResult(mFinalImageReference2, Consumer.IS_LAST);
+    verify(mConsumer2, never()).onNewResult(mFinalImageReference2, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.isEmpty());
   }
 
@@ -218,13 +219,13 @@ public class MultiplexProducerTest {
   @Test
   public void testTwoIdenticalInSequence() {
     mMultiplexProducer.produceResults(mConsumer1, mProducerContext1);
-    mForwardingConsumer1.onNewResult(mFinalImageReference1, true);
+    mForwardingConsumer1.onNewResult(mFinalImageReference1, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.isEmpty());
 
     mMultiplexProducer.produceResults(mConsumer2, mProducerContext2);
-    mForwardingConsumer2.onNewResult(mFinalImageReference2, true);
-    verify(mConsumer2).onNewResult(mFinalImageReference2, true);
-    verify(mConsumer1, never()).onNewResult(mFinalImageReference2, true);
+    mForwardingConsumer2.onNewResult(mFinalImageReference2, Consumer.IS_LAST);
+    verify(mConsumer2).onNewResult(mFinalImageReference2, Consumer.IS_LAST);
+    verify(mConsumer1, never()).onNewResult(mFinalImageReference2, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.isEmpty());
   }
 
@@ -246,16 +247,16 @@ public class MultiplexProducerTest {
     mMultiplexProducer.produceResults(mConsumer3, mProducerContext3);
 
     mProducerContext1.cancel();
-    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, false);
-    verify(mConsumer1, never()).onNewResult(mIntermediateImageReference1, false);
-    verify(mConsumer2).onNewResult(mIntermediateImageReference1, false);
-    verify(mConsumer3, never()).onNewResult(mIntermediateImageReference1, false);
+    mForwardingConsumer1.onNewResult(mIntermediateImageReference1, TEST_FLAG);
+    verify(mConsumer1, never()).onNewResult(mIntermediateImageReference1, TEST_FLAG);
+    verify(mConsumer2).onNewResult(mIntermediateImageReference1, TEST_FLAG);
+    verify(mConsumer3, never()).onNewResult(mIntermediateImageReference1, TEST_FLAG);
     assertTrue(mMultiplexProducer.mMultiplexers.size() == 2);
 
-    mForwardingConsumer2.onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer3).onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer1, never()).onNewResult(mIntermediateImageReference2, false);
-    verify(mConsumer2, never()).onNewResult(mIntermediateImageReference2, false);
+    mForwardingConsumer2.onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer3).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer1, never()).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
+    verify(mConsumer2, never()).onNewResult(mIntermediateImageReference2, Consumer.NO_FLAGS);
     assertTrue(mMultiplexProducer.mMultiplexers.size() == 2);
 
     mProducerContext3.cancel();
@@ -289,7 +290,7 @@ public class MultiplexProducerTest {
     assertTrue(mMultiplexProducer.mMultiplexers.isEmpty());
     mMultiplexProducer.produceResults(mConsumer2, mProducerContext2);
     assertTrue(mMultiplexProducer.mMultiplexers.size() == 1);
-    mForwardingConsumer1.onNewResult(mFinalImageReference1, true);
+    mForwardingConsumer1.onNewResult(mFinalImageReference1, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.size() == 1);
   }
 
@@ -304,8 +305,8 @@ public class MultiplexProducerTest {
     mForwardingConsumer1.onCancellation();
     assertEquals(1, mMultiplexProducer.mMultiplexers.size());
     verify(mInputProducer).produceResults(mForwardingConsumer2, mMultiplexedContext2);
-    mForwardingConsumer2.onNewResult(mFinalImageReference1, true);
-    verify(mConsumer2).onNewResult(mFinalImageReference1, true);
+    mForwardingConsumer2.onNewResult(mFinalImageReference1, Consumer.IS_LAST);
+    verify(mConsumer2).onNewResult(mFinalImageReference1, Consumer.IS_LAST);
     assertTrue(mMultiplexProducer.mMultiplexers.isEmpty());
   }
 

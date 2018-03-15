@@ -5,12 +5,12 @@ project.group = GROUP
 version = VERSION_NAME
 
 dependencies {
-    provided "com.google.code.findbugs:jsr305:${JSR_305_VERSION}"
-    compile "com.parse.bolts:bolts-tasks:${BOLTS_ANDROID_VERSION}"
-    compile "com.android.support:support-v4:${SUPPORT_LIB_VERSION}"
-    provided "javax.annotation:javax.annotation-api:${ANNOTATION_API_VERSION}"
-    compile project(':fbcore')
-    compile project(':imagepipeline-base')
+    compileOnly "com.google.code.findbugs:jsr305:${JSR_305_VERSION}"
+    compileOnly "javax.annotation:javax.annotation-api:${ANNOTATION_API_VERSION}"
+
+    implementation "com.android.support:support-core-utils:${SUPPORT_LIB_VERSION}"
+    implementation "com.parse.bolts:bolts-tasks:${BOLTS_ANDROID_VERSION}"
+    implementation project(':fbcore')
 }
 apply from: rootProject.file('release.gradle')
 
@@ -18,6 +18,10 @@ android {
 
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdkVersion rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        minSdkVersion rootProject.ext.samplesMinSdkVersion
+    }
 
 }
 
@@ -33,7 +37,7 @@ task jarTest (type: Jar) {
 }
 
 configurations {
-    testOutput.extendsFrom (testCompile)
+    testOutput.extendsFrom (testImplementation)
 }
 
 artifacts.add('archives', sourcesJar)

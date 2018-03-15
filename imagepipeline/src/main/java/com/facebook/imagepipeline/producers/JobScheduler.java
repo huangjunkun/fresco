@@ -1,24 +1,19 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.concurrent.GuardedBy;
-
+import android.os.SystemClock;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.imagepipeline.image.EncodedImage;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-
-import android.os.SystemClock;
-
-import com.facebook.common.internal.VisibleForTesting;
-import com.facebook.imagepipeline.image.EncodedImage;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Manages jobs so that only one can be executed at a time and no more often than once in
@@ -42,7 +37,7 @@ public class JobScheduler {
   }
 
   public interface JobRunnable {
-    void run(EncodedImage encodedImage, boolean isLast);
+    void run(EncodedImage encodedImage, @Consumer.Status int status);
   }
 
   private final Executor mExecutor;
@@ -58,7 +53,7 @@ public class JobScheduler {
   @GuardedBy("this")
   @VisibleForTesting EncodedImage mEncodedImage;
   @GuardedBy("this")
-  @VisibleForTesting boolean mIsLast;
+  @VisibleForTesting @Consumer.Status int mStatus;
 
   // job state
   @GuardedBy("this")
@@ -85,7 +80,7 @@ public class JobScheduler {
       }
     };
     mEncodedImage = null;
-    mIsLast = false;
+    mStatus = 0;
     mJobState = JobState.IDLE;
     mJobSubmitTime = 0;
     mJobStartTime = 0;
@@ -102,7 +97,7 @@ public class JobScheduler {
     synchronized (this) {
       oldEncodedImage = mEncodedImage;
       mEncodedImage = null;
-      mIsLast = false;
+      mStatus = 0;
     }
     EncodedImage.closeSafely(oldEncodedImage);
   }
@@ -116,15 +111,15 @@ public class JobScheduler {
    *
    * @return whether the job was successfully updated.
    */
-  public boolean updateJob(EncodedImage encodedImage, boolean isLast) {
-    if (!shouldProcess(encodedImage, isLast)) {
+  public boolean updateJob(EncodedImage encodedImage, @Consumer.Status int status) {
+    if (!shouldProcess(encodedImage, status)) {
       return false;
     }
     EncodedImage oldEncodedImage;
     synchronized (this) {
       oldEncodedImage = mEncodedImage;
       mEncodedImage = EncodedImage.cloneOrNull(encodedImage);
-      mIsLast = isLast;
+      mStatus = status;
     }
     EncodedImage.closeSafely(oldEncodedImage);
     return true;
@@ -146,7 +141,7 @@ public class JobScheduler {
     long when = 0;
     boolean shouldEnqueue = false;
     synchronized (this) {
-      if (!shouldProcess(mEncodedImage, mIsLast)) {
+      if (!shouldProcess(mEncodedImage, mStatus)) {
         return false;
       }
       switch (mJobState) {
@@ -191,20 +186,20 @@ public class JobScheduler {
   private void doJob() {
     long now = SystemClock.uptimeMillis();
     EncodedImage input;
-    boolean isLast;
+    int status;
     synchronized (this) {
       input = mEncodedImage;
-      isLast = mIsLast;
+      status = mStatus;
       mEncodedImage = null;
-      mIsLast = false;
+      mStatus = 0;
       mJobState = JobState.RUNNING;
       mJobStartTime = now;
     }
 
     try {
       // we need to do a check in case the job got cleared in the meantime
-      if (shouldProcess(input, isLast)) {
-        mJobRunnable.run(input, isLast);
+      if (shouldProcess(input, status)) {
+        mJobRunnable.run(input, status);
       }
     } finally {
       EncodedImage.closeSafely(input);
@@ -231,10 +226,12 @@ public class JobScheduler {
     }
   }
 
-  private static boolean shouldProcess(EncodedImage encodedImage, boolean isLast) {
+  private static boolean shouldProcess(EncodedImage encodedImage, @Consumer.Status int status) {
     // the last result should always be processed, whereas
     // an intermediate result should be processed only if valid
-    return  isLast || EncodedImage.isValid(encodedImage);
+    return BaseConsumer.isLast(status)
+        || BaseConsumer.statusHasFlag(status, Consumer.IS_PLACEHOLDER)
+        || EncodedImage.isValid(encodedImage);
   }
 
   /**

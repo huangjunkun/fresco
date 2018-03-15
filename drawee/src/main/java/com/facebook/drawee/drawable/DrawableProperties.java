@@ -1,14 +1,13 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.drawable;
 
+import android.annotation.SuppressLint;
 import android.graphics.ColorFilter;
 import android.graphics.drawable.Drawable;
 
@@ -43,6 +42,7 @@ public class DrawableProperties {
     mFilterBitmap = filterBitmap ? 1 : 0;
   }
 
+  @SuppressLint("Range")
   public void applyTo(Drawable drawable) {
     if (drawable == null) {
       return;

@@ -1,38 +1,30 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.platform;
 
+import static com.facebook.common.webp.WebpSupportStatus.sWebpBitmapFactory;
+
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.os.Build;
 import android.os.MemoryFile;
-
-import javax.annotation.Nullable;
-
 import com.facebook.common.internal.ByteStreams;
 import com.facebook.common.internal.Closeables;
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.Throwables;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferInputStream;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.common.streams.LimitedInputStream;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.FlexByteArrayPool;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferInputStream;
-
-import static com.facebook.common.webp.WebpSupportStatus.sWebpBitmapFactory;
-
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.Method;
+import javax.annotation.Nullable;
 
 /**
  * Bitmap decoder (Gingerbread to Jelly Bean).
@@ -44,15 +36,6 @@ import java.lang.reflect.Method;
 public class GingerbreadPurgeableDecoder extends DalvikPurgeableDecoder {
 
   private static Method sGetFileDescriptorMethod;
-  private final boolean mWebpSupportEnabled;
-
-  /**
-   * Creates a GingerbreadPurgeableDecoder with optional support for webp
-   * @param webpSupportEnabled If true the webpsupport library is enabled
-   */
-  public GingerbreadPurgeableDecoder(boolean webpSupportEnabled) {
-    this.mWebpSupportEnabled = webpSupportEnabled;
-  }
 
   /**
    * Decodes a byteArray into a purgeable bitmap
@@ -143,12 +126,7 @@ public class GingerbreadPurgeableDecoder extends DalvikPurgeableDecoder {
     try {
       memoryFile = copyToMemoryFile(bytesRef, inputLength, suffix);
       FileDescriptor fd = getMemoryFileDescriptor(memoryFile);
-      Bitmap bitmap;
-      if (mWebpSupportEnabled) {
-        bitmap = sWebpBitmapFactory.decodeFileDescriptor(fd, null, options);
-      } else {
-        bitmap = BitmapFactory.decodeFileDescriptor(fd, null, options);
-      }
+      Bitmap bitmap = sWebpBitmapFactory.decodeFileDescriptor(fd, null, options);
       return Preconditions.checkNotNull(bitmap, "BitmapFactory returned null");
     } catch (IOException e) {
       throw Throwables.propagate(e);

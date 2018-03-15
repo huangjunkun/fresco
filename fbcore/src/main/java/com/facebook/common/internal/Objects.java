@@ -19,7 +19,6 @@ package com.facebook.common.internal;
 import static com.facebook.common.internal.Preconditions.checkNotNull;
 
 import java.util.Arrays;
-
 import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
@@ -421,8 +420,8 @@ public final class Objects {
     }
 
     private static final class ValueHolder {
-      String name;
-      Object value;
+      @Nullable String name;
+      @Nullable Object value;
       ValueHolder next;
     }
   }

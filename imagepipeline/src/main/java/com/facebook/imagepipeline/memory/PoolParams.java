@@ -1,19 +1,15 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.memory;
 
-import javax.annotation.Nullable;
-
 import android.util.SparseIntArray;
-
 import com.facebook.common.internal.Preconditions;
+import javax.annotation.Nullable;
 
 /**
  * Config parameters for pools ({@link BasePool}. Supplied via a provider.
@@ -40,7 +36,7 @@ import com.facebook.common.internal.Preconditions;
  * <p>
  * {@link #minBucketSize}
  * This represents the minimum size of the buckets in the pool. This assures that all buckets can
- * hold any element smaller or equal to this size.
+ * hold any element larger or equal to this size.
  * <p>
  * {@link #maxBucketSize}
  * This represents the maximum size of the buckets in the pool. This restricts all buckets to only

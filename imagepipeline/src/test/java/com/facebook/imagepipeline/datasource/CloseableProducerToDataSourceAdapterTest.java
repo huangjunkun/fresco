@@ -1,31 +1,29 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.datasource;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
+import com.facebook.common.executors.CallerThreadExecutor;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.common.references.ResourceReleaser;
 import com.facebook.datasource.DataSource;
 import com.facebook.datasource.DataSubscriber;
 import com.facebook.imagepipeline.listener.RequestListener;
+import com.facebook.imagepipeline.producers.BaseConsumer;
 import com.facebook.imagepipeline.producers.Consumer;
 import com.facebook.imagepipeline.producers.Producer;
 import com.facebook.imagepipeline.producers.SettableProducerContext;
-
-import com.facebook.common.executors.CallerThreadExecutor;
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
 import org.robolectric.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 @RunWith(RobolectricTestRunner.class)
 public class CloseableProducerToDataSourceAdapterTest {
@@ -194,7 +192,7 @@ public class CloseableProducerToDataSourceAdapterTest {
       CloseableReference<Object> resultRef,
       boolean isLast,
       int numSubscribers) {
-    mInternalConsumer.onNewResult(resultRef, isLast);
+    mInternalConsumer.onNewResult(resultRef, BaseConsumer.simpleStatusForIsLast(isLast));
     if (isLast) {
       verify(mRequestListener).onRequestSuccess(
           mSettableProducerContext.getImageRequest(),
@@ -259,7 +257,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   @Test
   public void test_C_I_a() {
     testClose(NOT_FINISHED, 1);
-    mInternalConsumer.onNewResult(mResultRef2, INTERMEDIATE);
+    mInternalConsumer.onNewResult(mResultRef2, Consumer.NO_FLAGS);
     verifyClosed(NOT_FINISHED, null);
     testSubscribe(NO_INTERACTIONS);
   }
@@ -267,7 +265,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   @Test
   public void test_C_L_a() {
     testClose(NOT_FINISHED, 1);
-    mInternalConsumer.onNewResult(mResultRef2, LAST);
+    mInternalConsumer.onNewResult(mResultRef2, Consumer.IS_LAST);
     verifyClosed(NOT_FINISHED, null);
     testSubscribe(NO_INTERACTIONS);
   }
@@ -339,7 +337,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   @Test
   public void test_L_I_a_C() {
     testNewResult(mResultRef1, LAST, 1);
-    mInternalConsumer.onNewResult(mResultRef2, INTERMEDIATE);
+    mInternalConsumer.onNewResult(mResultRef2, Consumer.NO_FLAGS);
     verifyWithResult(mResultRef1, LAST);
     testSubscribe(ON_NEW_RESULT);
     testClose(FINISHED, 2);
@@ -348,7 +346,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   @Test
   public void test_L_L_a_C() {
     testNewResult(mResultRef1, LAST, 1);
-    mInternalConsumer.onNewResult(mResultRef2, LAST);
+    mInternalConsumer.onNewResult(mResultRef2, Consumer.IS_LAST);
     verifyWithResult(mResultRef1, LAST);
     testSubscribe(ON_NEW_RESULT);
     testClose(FINISHED, 2);
@@ -373,7 +371,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   @Test
   public void test_F_I_a_C() {
     testFailure(null, 1);
-    mInternalConsumer.onNewResult(mResultRef1, INTERMEDIATE);
+    mInternalConsumer.onNewResult(mResultRef1, Consumer.NO_FLAGS);
     verifyFailed(null, mException);
     testSubscribe(ON_FAILURE);
     testClose(mException);
@@ -382,7 +380,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   @Test
   public void test_F_L_a_C() {
     testFailure(null, 1);
-    mInternalConsumer.onNewResult(mResultRef1, LAST);
+    mInternalConsumer.onNewResult(mResultRef1, Consumer.IS_LAST);
     verifyFailed(null, mException);
     testSubscribe(ON_FAILURE);
     testClose(mException);
@@ -399,7 +397,7 @@ public class CloseableProducerToDataSourceAdapterTest {
 
   @Test
   public void test_NI_S_a_C() {
-    mInternalConsumer.onNewResult(null, INTERMEDIATE);
+    mInternalConsumer.onNewResult(null, Consumer.NO_FLAGS);
     verify(mDataSubscriber1).onNewResult(mDataSource);
     verifyWithResult(null, INTERMEDIATE);
 
@@ -410,13 +408,13 @@ public class CloseableProducerToDataSourceAdapterTest {
 
   @Test
   public void test_NI_a_NL_C() {
-    mInternalConsumer.onNewResult(null, INTERMEDIATE);
+    mInternalConsumer.onNewResult(null, Consumer.NO_FLAGS);
     verify(mDataSubscriber1).onNewResult(mDataSource);
     verifyWithResult(null, INTERMEDIATE);
 
     testSubscribe(NO_INTERACTIONS);
 
-    mInternalConsumer.onNewResult(null, LAST);
+    mInternalConsumer.onNewResult(null, Consumer.IS_LAST);
     verify(mRequestListener).onRequestSuccess(
         mSettableProducerContext.getImageRequest(),
         mRequestId,
@@ -432,7 +430,7 @@ public class CloseableProducerToDataSourceAdapterTest {
   public void test_I_NL_a_C() {
     testNewResult(mResultRef1, INTERMEDIATE, 1);
 
-    mInternalConsumer.onNewResult(null, LAST);
+    mInternalConsumer.onNewResult(null, Consumer.IS_LAST);
     verify(mRequestListener).onRequestSuccess(
         mSettableProducerContext.getImageRequest(),
         mRequestId,

@@ -1,23 +1,21 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.backends.pipeline;
 
-import javax.annotation.Nullable;
-
 import android.content.Context;
-
 import com.facebook.common.logging.FLog;
 import com.facebook.drawee.view.SimpleDraweeView;
 import com.facebook.imagepipeline.core.ImagePipeline;
 import com.facebook.imagepipeline.core.ImagePipelineConfig;
 import com.facebook.imagepipeline.core.ImagePipelineFactory;
+import com.facebook.soloader.SoLoader;
+import java.io.IOException;
+import javax.annotation.Nullable;
 
 /**
  * Fresco entry point.
@@ -36,13 +34,21 @@ public class Fresco {
 
   /** Initializes Fresco with the default config. */
   public static void initialize(Context context) {
-    initialize(context, null);
+    initialize(context, null, null);
+  }
+
+  /** Initializes Fresco with the default Drawee config. */
+  public static void initialize(
+      Context context,
+      @Nullable ImagePipelineConfig imagePipelineConfig) {
+    initialize(context, imagePipelineConfig, null);
   }
 
   /** Initializes Fresco with the specified config. */
   public static void initialize(
       Context context,
-      @Nullable ImagePipelineConfig imagePipelineConfig) {
+      @Nullable ImagePipelineConfig imagePipelineConfig,
+      @Nullable DraweeConfig draweeConfig) {
     if (sIsInitialized) {
       FLog.w(
           TAG,
@@ -51,6 +57,11 @@ public class Fresco {
     } else {
       sIsInitialized = true;
     }
+    try {
+      SoLoader.init(context, 0);
+    } catch (IOException e) {
+      throw new RuntimeException("Could not initialize SoLoader", e);
+    }
     // we should always use the application context to avoid memory leaks
     context = context.getApplicationContext();
     if (imagePipelineConfig == null) {
@@ -58,11 +69,15 @@ public class Fresco {
     } else {
       ImagePipelineFactory.initialize(imagePipelineConfig);
     }
-    initializeDrawee(context);
+    initializeDrawee(context, draweeConfig);
   }
 
-  private static void initializeDrawee(Context context) {
-    sDraweeControllerBuilderSupplier = new PipelineDraweeControllerBuilderSupplier(context);
+  /** Initializes Drawee with the specified config. */
+  private static void initializeDrawee(
+      Context context,
+      @Nullable DraweeConfig draweeConfig) {
+    sDraweeControllerBuilderSupplier =
+        new PipelineDraweeControllerBuilderSupplier(context, draweeConfig);
     SimpleDraweeView.initialize(sDraweeControllerBuilderSupplier);
   }
 

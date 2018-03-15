@@ -1,28 +1,23 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.animated.impl;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
-
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-
 import android.net.Uri;
-
 import com.facebook.cache.common.CacheKey;
 import com.facebook.common.internal.Objects;
 import com.facebook.common.internal.VisibleForTesting;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.imagepipeline.cache.CountingMemoryCache;
 import com.facebook.imagepipeline.image.CloseableImage;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Facade to the image memory cache for frames of an animated image.
@@ -71,6 +66,11 @@ public class AnimatedFrameCache {
     @Override
     public boolean containsUri(Uri uri) {
       return mImageCacheKey.containsUri(uri);
+    }
+
+    @Override
+    public String getUriString() {
+      return null;
     }
   }
 
@@ -125,6 +125,13 @@ public class AnimatedFrameCache {
   @Nullable
   public CloseableReference<CloseableImage> get(int frameIndex) {
     return mBackingCache.get(keyFor(frameIndex));
+  }
+
+  /**
+   * Check whether the cache contains an image for the given frame index.
+   */
+  public boolean contains(int frameIndex) {
+    return mBackingCache.contains(keyFor(frameIndex));
   }
 
   /**

@@ -1,17 +1,14 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import java.util.Map;
-
 import com.facebook.common.executors.StatefulRunnable;
+import java.util.Map;
 
 /**
  * {@link StatefulRunnable} intended to be used by producers.
@@ -46,7 +43,7 @@ public abstract class StatefulProducerRunnable<T>
         mRequestId,
         mProducerName,
         mProducerListener.requiresExtraMap(mRequestId) ? getExtraMapOnSuccess(result) : null);
-    mConsumer.onNewResult(result, true);
+    mConsumer.onNewResult(result, Consumer.IS_LAST);
   }
 
   @Override

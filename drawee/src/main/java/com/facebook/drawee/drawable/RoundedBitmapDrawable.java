@@ -1,18 +1,11 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.drawable;
-
-import javax.annotation.Nullable;
-
-import java.lang.ref.WeakReference;
-import java.util.Arrays;
 
 import android.content.res.Resources;
 import android.graphics.Bitmap;
@@ -26,9 +19,11 @@ import android.graphics.Path;
 import android.graphics.RectF;
 import android.graphics.Shader;
 import android.graphics.drawable.BitmapDrawable;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.VisibleForTesting;
+import java.lang.ref.WeakReference;
+import java.util.Arrays;
+import javax.annotation.Nullable;
 
 /**
 * A drawable that can have rounded corners.
@@ -39,11 +34,13 @@ public class RoundedBitmapDrawable extends BitmapDrawable
   private boolean mRadiiNonZero = false;
   private final float[] mCornerRadii = new float[8];
   @VisibleForTesting final float[] mBorderRadii = new float[8];
+  @VisibleForTesting @Nullable float[] mInsideBorderRadii;
 
   @VisibleForTesting final RectF mRootBounds = new RectF();
   @VisibleForTesting final RectF mPrevRootBounds = new RectF();
   @VisibleForTesting final RectF mBitmapBounds = new RectF();
   @VisibleForTesting final RectF mDrawableBounds = new RectF();
+  @VisibleForTesting @Nullable RectF mInsideBorderBounds;
 
   @VisibleForTesting final Matrix mBoundsTransform = new Matrix();
   @VisibleForTesting final Matrix mPrevBoundsTransform = new Matrix();
@@ -52,10 +49,14 @@ public class RoundedBitmapDrawable extends BitmapDrawable
   @VisibleForTesting final Matrix mPrevParentTransform = new Matrix();
   @VisibleForTesting final Matrix mInverseParentTransform = new Matrix();
 
+  @VisibleForTesting @Nullable Matrix mInsideBorderTransform;
+  @VisibleForTesting @Nullable Matrix mPrevInsideBorderTransform;
+
   @VisibleForTesting final Matrix mTransform = new Matrix();
   private float mBorderWidth = 0;
   private int mBorderColor = Color.TRANSPARENT;
   private float mPadding = 0;
+  private boolean mScaleDownInsideBorders = false;
 
   private final Path mPath = new Path();
   private final Path mBorderPath = new Path();
@@ -201,8 +202,26 @@ public class RoundedBitmapDrawable extends BitmapDrawable
   }
 
   /**
-   * TransformAwareDrawable method
+   * Sets whether image should be scaled down inside borders.
+   *
+   * @param scaleDownInsideBorders
    */
+  @Override
+  public void setScaleDownInsideBorders(boolean scaleDownInsideBorders) {
+    if (mScaleDownInsideBorders != scaleDownInsideBorders) {
+      mScaleDownInsideBorders = scaleDownInsideBorders;
+      mIsPathDirty = true;
+      invalidateSelf();
+    }
+  }
+
+  /** Gets whether image should be scaled down inside borders. */
+  @Override
+  public boolean getScaleDownInsideBorders() {
+    return mScaleDownInsideBorders;
+  }
+
+  /** TransformAwareDrawable method */
   @Override
   public void setTransformCallback(@Nullable TransformCallback transformCallback) {
     mTransformCallback = transformCallback;
@@ -245,11 +264,11 @@ public class RoundedBitmapDrawable extends BitmapDrawable
   }
 
   /**
-   * If both the radii and border width are zero, there is nothing to round.
+   * If both the radii and border width are zero or bitmap is null, there is nothing to round.
    */
   @VisibleForTesting
   boolean shouldRound() {
-    return mIsCircle || mRadiiNonZero || mBorderWidth > 0;
+    return (mIsCircle || mRadiiNonZero || mBorderWidth > 0) && getBitmap() != null;
   }
 
   private void updateTransform() {
@@ -264,15 +283,46 @@ public class RoundedBitmapDrawable extends BitmapDrawable
     mBitmapBounds.set(0, 0, getBitmap().getWidth(), getBitmap().getHeight());
     mDrawableBounds.set(getBounds());
     mBoundsTransform.setRectToRect(mBitmapBounds, mDrawableBounds, Matrix.ScaleToFit.FILL);
+    if (mScaleDownInsideBorders) {
+      if (mInsideBorderBounds == null) {
+        mInsideBorderBounds = new RectF(mRootBounds);
+      } else {
+        mInsideBorderBounds.set(mRootBounds);
+      }
+      mInsideBorderBounds.inset(mBorderWidth, mBorderWidth);
+      if (mInsideBorderTransform == null) {
+        mInsideBorderTransform = new Matrix();
+      }
+      mInsideBorderTransform.setRectToRect(
+          mRootBounds, mInsideBorderBounds, Matrix.ScaleToFit.FILL);
+    } else if (mInsideBorderTransform != null) {
+      mInsideBorderTransform.reset();
+    }
 
-    if (!mParentTransform.equals(mPrevParentTransform) ||
-        !mBoundsTransform.equals(mPrevBoundsTransform)) {
+    if (!mParentTransform.equals(mPrevParentTransform)
+        || !mBoundsTransform.equals(mPrevBoundsTransform)
+        || (mInsideBorderTransform != null
+            && !mInsideBorderTransform.equals(mPrevInsideBorderTransform))) {
       mIsShaderTransformDirty = true;
+
       mParentTransform.invert(mInverseParentTransform);
       mTransform.set(mParentTransform);
+      if (mScaleDownInsideBorders) {
+        mTransform.postConcat(mInsideBorderTransform);
+      }
       mTransform.preConcat(mBoundsTransform);
+
       mPrevParentTransform.set(mParentTransform);
       mPrevBoundsTransform.set(mBoundsTransform);
+      if (mScaleDownInsideBorders) {
+        if (mPrevInsideBorderTransform == null) {
+          mPrevInsideBorderTransform = new Matrix(mInsideBorderTransform);
+        } else {
+          mPrevInsideBorderTransform.set(mInsideBorderTransform);
+        }
+      } else if (mPrevInsideBorderTransform != null) {
+        mPrevInsideBorderTransform.reset();
+      }
     }
 
     if (!mRootBounds.equals(mPrevRootBounds)) {
@@ -298,17 +348,26 @@ public class RoundedBitmapDrawable extends BitmapDrawable
       mRootBounds.inset(-mBorderWidth/2, -mBorderWidth/2);
 
       mPath.reset();
-      mRootBounds.inset(mPadding, mPadding);
+      float totalPadding = mPadding + (mScaleDownInsideBorders ? mBorderWidth : 0);
+      mRootBounds.inset(totalPadding, totalPadding);
       if (mIsCircle) {
         mPath.addCircle(
             mRootBounds.centerX(),
             mRootBounds.centerY(),
             Math.min(mRootBounds.width(), mRootBounds.height())/2,
             Path.Direction.CW);
+      } else if (mScaleDownInsideBorders) {
+        if (mInsideBorderRadii == null) {
+          mInsideBorderRadii = new float[8];
+        }
+        for (int i = 0; i < mBorderRadii.length; i++) {
+          mInsideBorderRadii[i] = mCornerRadii[i] - mBorderWidth;
+        }
+        mPath.addRoundRect(mRootBounds, mInsideBorderRadii, Path.Direction.CW);
       } else {
         mPath.addRoundRect(mRootBounds, mCornerRadii, Path.Direction.CW);
       }
-      mRootBounds.inset(-(mPadding), -(mPadding));
+      mRootBounds.inset(-(totalPadding), -(totalPadding));
       mPath.setFillType(Path.FillType.WINDING);
       mIsPathDirty = false;
     }

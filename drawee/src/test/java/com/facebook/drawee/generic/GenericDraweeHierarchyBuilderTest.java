@@ -1,34 +1,28 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.generic;
 
-import java.util.Arrays;
+import static com.facebook.drawee.drawable.ScalingUtils.ScaleType;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.mockito.Mockito.mock;
 
-import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.StateListDrawable;
-
 import com.facebook.drawee.drawable.AndroidGraphicsTestUtils;
-import com.facebook.drawee.drawable.ArrayDrawable;
-import com.facebook.drawee.drawable.ScalingUtils;
-import org.robolectric.RobolectricTestRunner;
-
+import java.util.Arrays;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.mock;
-
-import static com.facebook.drawee.drawable.ScalingUtils.ScaleType;
+import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public class GenericDraweeHierarchyBuilderTest {
@@ -46,7 +40,6 @@ public class GenericDraweeHierarchyBuilderTest {
   private final BitmapDrawable mProgressBarDrawable1 = mock(BitmapDrawable.class);
   private final BitmapDrawable mProgressBarDrawable2 = mock(BitmapDrawable.class);
   private final BitmapDrawable mPressedStateDrawable = mock(BitmapDrawable.class);
-  private final Matrix mActualImageMatrix = mock(Matrix.class);
   private final PointF mFocusPoint = mock(PointF.class);
   private final RoundingParams mRoundingParams = mock(RoundingParams.class);
 
@@ -62,7 +55,6 @@ public class GenericDraweeHierarchyBuilderTest {
     assertEquals(null, builder.getProgressBarImage());
     assertEquals(ScaleType.CENTER_INSIDE, builder.getProgressBarImageScaleType());
     assertEquals(ScaleType.CENTER_CROP, builder.getActualImageScaleType());
-    assertEquals(null, builder.getActualImageMatrix());
     assertEquals(null, builder.getActualImageFocusPoint());
     assertEquals(null, builder.getBackground());
     assertEquals(null, builder.getOverlays());
@@ -126,11 +118,6 @@ public class GenericDraweeHierarchyBuilderTest {
     assertEquals(mProgressBarDrawable1, builder.getProgressBarImage());
     assertEquals(ScaleType.CENTER_CROP, builder.getProgressBarImageScaleType());
 
-    // test actual image matrix
-    builder.setActualImageMatrix(mActualImageMatrix);
-    assertSame(mActualImageMatrix, builder.getActualImageMatrix());
-    assertSame(null, builder.getActualImageScaleType());
-
     // test actual image scale type
     builder.setActualImageScaleType(ScaleType.FIT_START);
     assertEquals(ScaleType.FIT_START, builder.getActualImageScaleType());
@@ -140,16 +127,9 @@ public class GenericDraweeHierarchyBuilderTest {
     AndroidGraphicsTestUtils.assertEquals(mFocusPoint, builder.getActualImageFocusPoint(), 0f);
     builder.setActualImageScaleType(ScaleType.FOCUS_CROP);
     assertSame(ScaleType.FOCUS_CROP, builder.getActualImageScaleType());
-    assertSame(null, builder.getActualImageMatrix());
 
     // test backgrounds & overlays
-    builder.setBackgrounds(Arrays.asList(mBackgroundDrawable1, mBackgroundDrawable2));
     builder.setOverlays(Arrays.asList(mOverlayDrawable1, mOverlayDrawable2));
-    assertEquals(builder.getBackground().getClass(), ArrayDrawable.class);
-    ArrayDrawable bgArrayDrawable = (ArrayDrawable) builder.getBackground();
-    assertEquals(2, bgArrayDrawable.getNumberOfLayers());
-    assertSame(mBackgroundDrawable1, bgArrayDrawable.getDrawable(0));
-    assertSame(mBackgroundDrawable2, bgArrayDrawable.getDrawable(1));
     assertArrayEquals(
         builder.getOverlays().toArray(),
         new Drawable[]{mOverlayDrawable1, mOverlayDrawable2});

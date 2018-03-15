@@ -1,18 +1,15 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.concurrent.ThreadSafe;
-import javax.annotation.Nullable;
-
 import com.facebook.common.logging.FLog;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Base implementation of Consumer that implements error handling conforming to the
@@ -39,14 +36,65 @@ public abstract class BaseConsumer<T> implements Consumer<T> {
     mIsFinished = false;
   }
 
+  /**
+   * Checks whether the provided status includes the `IS_LAST` flag, marking this as the last result
+   * the consumer will receive.
+   */
+  public static boolean isLast(@Consumer.Status int status) {
+    return (status & Consumer.IS_LAST) == Consumer.IS_LAST;
+  }
+
+  /**
+   * Checks whether the provided status includes the `IS_LAST` flag, marking this as the last result
+   * the consumer will receive.
+   */
+  public static boolean isNotLast(@Consumer.Status int status) {
+    return !isLast(status);
+  }
+
+  /**
+   * Updates a provided status by ensuring the specified flag is turned on.
+   */
+  public static @Status int turnOnStatusFlag(@Status int status, @Status int flag) {
+    return status | flag;
+  }
+
+  /**
+   * Updates a provided status by ensuring the specified flag is turned off.
+   */
+  public static @Status int turnOffStatusFlag(@Status int status, @Status int flag) {
+    return status & ~flag;
+  }
+
+  /**
+   * Checks whether the provided status contains a specified flag.
+   */
+  public static boolean statusHasFlag(@Status int status, @Status int flag) {
+    return (status & flag) == flag;
+  }
+
+  /**
+   * Checks whether the provided status contains any of the specified flags.
+   */
+  public static boolean statusHasAnyFlag(@Status int status, @Status int flag) {
+    return (status & flag) != 0;
+  }
+
+  /**
+   * Creates a simple status value which only identifies whether this is the last result.
+   */
+  public static @Status int simpleStatusForIsLast(boolean isLast) {
+    return isLast ? IS_LAST : NO_FLAGS;
+  }
+
   @Override
-  public synchronized void onNewResult(@Nullable T newResult, boolean isLast) {
+  public synchronized void onNewResult(@Nullable T newResult, @Status int status) {
     if (mIsFinished) {
       return;
     }
-    mIsFinished = isLast;
+    mIsFinished = isLast(status);
     try {
-      onNewResultImpl(newResult, isLast);
+      onNewResultImpl(newResult, status);
     } catch (Exception e) {
       onUnhandledException(e);
     }
@@ -98,7 +146,7 @@ public abstract class BaseConsumer<T> implements Consumer<T> {
   /**
    * Called by onNewResult, override this method instead.
    */
-  protected abstract void onNewResultImpl(T newResult, boolean isLast);
+  protected abstract void onNewResultImpl(T newResult, @Status int status);
 
   /**
    * Called by onFailure, override this method instead

@@ -1,21 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.Nullable;
-
+import com.facebook.imagepipeline.image.EncodedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-
-import com.facebook.imagepipeline.image.EncodedImage;
+import javax.annotation.Nullable;
 
 /**
  * Interface that specifies network fetcher used by the image pipeline.

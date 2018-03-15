@@ -1,20 +1,18 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import static org.junit.Assert.*;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.eq;
+import static org.mockito.Mockito.*;
 
 import android.graphics.Bitmap;
-
 import com.facebook.common.internal.ImmutableMap;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.common.references.ResourceReleaser;
@@ -28,7 +26,9 @@ import com.facebook.imagepipeline.request.RepeatedPostprocessor;
 import com.facebook.imagepipeline.request.RepeatedPostprocessorRunner;
 import com.facebook.imagepipeline.testing.FakeClock;
 import com.facebook.imagepipeline.testing.TestExecutorService;
-
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
@@ -36,12 +36,6 @@ import org.mockito.invocation.*;
 import org.mockito.stubbing.*;
 import org.robolectric.*;
 import org.robolectric.annotation.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Matchers.any;
-import static org.mockito.Matchers.anyBoolean;
-import static org.mockito.Matchers.eq;
-import static org.mockito.Mockito.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest= Config.NONE)
@@ -105,7 +99,7 @@ public class RepeatedPostprocessorProducerTest {
             return null;
           }
         }
-    ).when(mConsumer).onNewResult(any(CloseableReference.class), anyBoolean());
+    ).when(mConsumer).onNewResult(any(CloseableReference.class), anyInt());
     mInOrder = inOrder(mPostprocessor, mProducerListener, mConsumer);
   }
 
@@ -115,7 +109,7 @@ public class RepeatedPostprocessorProducerTest {
     RepeatedPostprocessorRunner repeatedPostprocessorRunner = getRunner();
 
     setupNewSourceImage();
-    postprocessorConsumer.onNewResult(mSourceCloseableImageRef, false);
+    postprocessorConsumer.onNewResult(mSourceCloseableImageRef, Consumer.NO_FLAGS);
     mSourceCloseableImageRef.close();
     mTestExecutorService.runUntilIdle();
 
@@ -265,7 +259,7 @@ public class RepeatedPostprocessorProducerTest {
   private void performNewResult(RepeatedPostprocessorConsumer postprocessorConsumer, boolean run) {
     setupNewSourceImage();
     setupNewDestinationImage();
-    postprocessorConsumer.onNewResult(mSourceCloseableImageRef, true);
+    postprocessorConsumer.onNewResult(mSourceCloseableImageRef, Consumer.IS_LAST);
     mSourceCloseableImageRef.close();
     if (run) {
       mTestExecutorService.runUntilIdle();
@@ -328,7 +322,7 @@ public class RepeatedPostprocessorProducerTest {
     mInOrder.verify(mProducerListener).requiresExtraMap(mRequestId);
     mInOrder.verify(mProducerListener)
         .onProducerFinishWithSuccess(mRequestId, PostprocessorProducer.NAME, mExtraMap);
-    mInOrder.verify(mConsumer).onNewResult(any(CloseableReference.class), eq(false));
+    mInOrder.verify(mConsumer).onNewResult(any(CloseableReference.class), eq(Consumer.NO_FLAGS));
     mInOrder.verifyNoMoreInteractions();
 
     assertEquals(index + 1, mResults.size());

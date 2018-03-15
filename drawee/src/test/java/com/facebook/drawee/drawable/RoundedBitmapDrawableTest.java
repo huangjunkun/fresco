@@ -1,31 +1,26 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.drawable;
 
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
+
 import android.content.res.Resources;
 import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.ColorFilter;
 import android.graphics.Paint;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.util.DisplayMetrics;
-
-import org.robolectric.RobolectricTestRunner;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
+import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public class RoundedBitmapDrawableTest {
@@ -34,6 +29,8 @@ public class RoundedBitmapDrawableTest {
   private DisplayMetrics mDisplayMetrics;
 
   RoundedBitmapDrawable mRoundedBitmapDrawable;
+  RoundedBitmapDrawable mRoundedBitmapDrawableWithNullBitmap;
+
   private final Drawable.Callback mCallback = mock(Drawable.Callback.class);
 
   @Before
@@ -43,6 +40,9 @@ public class RoundedBitmapDrawableTest {
     mDisplayMetrics = mock(DisplayMetrics.class);
     when(mResources.getDisplayMetrics()).thenReturn(mDisplayMetrics);
     mRoundedBitmapDrawable = new RoundedBitmapDrawable(mResources, mBitmap);
+    mRoundedBitmapDrawable.setCallback(mCallback);
+
+    mRoundedBitmapDrawableWithNullBitmap = new RoundedBitmapDrawable(mResources, null);
     mRoundedBitmapDrawable.setCallback(mCallback);
   }
 
@@ -86,8 +86,16 @@ public class RoundedBitmapDrawableTest {
   }
 
   @Test
+  public void testSetScaleDownInsideBorders() {
+    mRoundedBitmapDrawable.setScaleDownInsideBorders(true);
+    verify(mCallback).invalidateDrawable(mRoundedBitmapDrawable);
+    assertTrue(mRoundedBitmapDrawable.getScaleDownInsideBorders());
+  }
+
+  @Test
   public void testShouldRoundDefault() {
     assertFalse(mRoundedBitmapDrawable.shouldRound());
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
   }
 
   @Test
@@ -96,6 +104,11 @@ public class RoundedBitmapDrawableTest {
     assertTrue(mRoundedBitmapDrawable.shouldRound());
     mRoundedBitmapDrawable.setRadius(0);
     assertFalse(mRoundedBitmapDrawable.shouldRound());
+
+    mRoundedBitmapDrawableWithNullBitmap.setRadius(5);
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
+    mRoundedBitmapDrawableWithNullBitmap.setRadius(0);
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
   }
 
   @Test
@@ -104,6 +117,11 @@ public class RoundedBitmapDrawableTest {
     assertTrue(mRoundedBitmapDrawable.shouldRound());
     mRoundedBitmapDrawable.setRadii(new float[]{0, 0, 0, 0, 0, 0, 0, 0});
     assertFalse(mRoundedBitmapDrawable.shouldRound());
+
+    mRoundedBitmapDrawableWithNullBitmap.setRadii(new float[]{0, 0, 0, 0, 0, 0, 0, 1});
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
+    mRoundedBitmapDrawableWithNullBitmap.setRadii(new float[]{0, 0, 0, 0, 0, 0, 0, 0});
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
   }
 
   @Test
@@ -112,6 +130,11 @@ public class RoundedBitmapDrawableTest {
     assertTrue(mRoundedBitmapDrawable.shouldRound());
     mRoundedBitmapDrawable.setCircle(false);
     assertFalse(mRoundedBitmapDrawable.shouldRound());
+
+    mRoundedBitmapDrawableWithNullBitmap.setCircle(true);
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
+    mRoundedBitmapDrawableWithNullBitmap.setCircle(false);
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
   }
 
   @Test
@@ -120,6 +143,11 @@ public class RoundedBitmapDrawableTest {
     assertTrue(mRoundedBitmapDrawable.shouldRound());
     mRoundedBitmapDrawable.setBorder(0x00000000, 0);
     assertFalse(mRoundedBitmapDrawable.shouldRound());
+
+    mRoundedBitmapDrawableWithNullBitmap.setBorder(0xFFFFFFFF, 1);
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
+    mRoundedBitmapDrawableWithNullBitmap.setBorder(0x00000000, 0);
+    assertFalse(mRoundedBitmapDrawableWithNullBitmap.shouldRound());
   }
 
   @Test

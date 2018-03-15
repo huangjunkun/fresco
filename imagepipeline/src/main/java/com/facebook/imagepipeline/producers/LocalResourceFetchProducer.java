@@ -1,39 +1,34 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import java.io.IOException;
-import java.util.concurrent.Executor;
-
 import android.content.res.AssetFileDescriptor;
 import android.content.res.Resources;
-
-import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.request.ImageRequest;
+import java.io.IOException;
+import java.util.concurrent.Executor;
 
 /**
  * Executes a local fetch from a resource.
  */
 public class LocalResourceFetchProducer extends LocalFetchProducer {
-  @VisibleForTesting static final String PRODUCER_NAME = "LocalResourceFetchProducer";
+
+  public static final String PRODUCER_NAME = "LocalResourceFetchProducer";
 
   private final Resources mResources;
 
   public LocalResourceFetchProducer(
       Executor executor,
       PooledByteBufferFactory pooledByteBufferFactory,
-      Resources resources,
-      boolean decodeFileDescriptorEnabled) {
-    super(executor, pooledByteBufferFactory, decodeFileDescriptorEnabled);
+      Resources resources) {
+    super(executor, pooledByteBufferFactory);
     mResources = resources;
   }
 

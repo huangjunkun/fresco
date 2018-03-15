@@ -1,18 +1,13 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.generic;
 
-import javax.annotation.Nullable;
-
-import java.util.Arrays;
-import java.util.List;
+import static com.facebook.drawee.drawable.ScalingUtils.ScaleType;
 
 import android.content.res.Resources;
 import android.graphics.ColorFilter;
@@ -20,11 +15,10 @@ import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.StateListDrawable;
-
 import com.facebook.common.internal.Preconditions;
-import com.facebook.drawee.drawable.ArrayDrawable;
-
-import static com.facebook.drawee.drawable.ScalingUtils.ScaleType;
+import java.util.Arrays;
+import java.util.List;
+import javax.annotation.Nullable;
 
 /**
  * Class to construct a {@link GenericDraweeHierarchy}.
@@ -514,28 +508,6 @@ public class GenericDraweeHierarchyBuilder {
   }
 
   /**
-   * Sets the transformation matrix, and removes the scale type, for the actual image.
-   *
-   * @param actualImageMatrix matrix for the actual image
-   * @return modified instance of this builder
-   *
-   * @deprecated implement and set a custom {@link ScaleType} instead.
-   */
-  @Deprecated
-  public GenericDraweeHierarchyBuilder setActualImageMatrix(@Nullable Matrix actualImageMatrix) {
-    mActualImageMatrix = actualImageMatrix;
-    mActualImageScaleType = null;
-    return this;
-  }
-
-  /**
-   * Gets the matrix for the actual image.
-   */
-  public @Nullable Matrix getActualImageMatrix() {
-    return mActualImageMatrix;
-  }
-
-  /**
    * Sets the focus point for the actual image.
    *
    * If a focus point aware scale type is used (e.g. FOCUS_CROP), the focus point of the image
@@ -574,26 +546,6 @@ public class GenericDraweeHierarchyBuilder {
    */
   public @Nullable ColorFilter getActualImageColorFilter() {
     return mActualImageColorFilter;
-  }
-
-  /**
-   * Sets the backgrounds.
-   *
-   * Backgrounds are drawn in list order before the rest of the hierarchy and overlays. The
-   * first background will be drawn at the bottom.
-   *
-   * @deprecated use {@code setBackground} instead
-   * @param backgrounds background drawables
-   * @return modified instance of this builder
-   */
-  @Deprecated
-  public GenericDraweeHierarchyBuilder setBackgrounds(@Nullable List<Drawable> backgrounds) {
-    if (backgrounds == null) {
-      mBackground = null;
-    } else {
-      mBackground = new ArrayDrawable(backgrounds.toArray(new Drawable[backgrounds.size()]));
-    }
-    return this;
   }
 
   /**

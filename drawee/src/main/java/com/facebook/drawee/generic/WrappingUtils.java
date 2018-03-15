@@ -1,14 +1,12 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 package com.facebook.drawee.generic;
 
-import javax.annotation.Nullable;
+import static com.facebook.drawee.drawable.ScalingUtils.ScaleType;
 
 import android.content.res.Resources;
 import android.graphics.Color;
@@ -18,7 +16,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.os.Build;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.drawee.drawable.DrawableParent;
 import com.facebook.drawee.drawable.ForwardingDrawable;
@@ -28,8 +25,7 @@ import com.facebook.drawee.drawable.RoundedBitmapDrawable;
 import com.facebook.drawee.drawable.RoundedColorDrawable;
 import com.facebook.drawee.drawable.RoundedCornersDrawable;
 import com.facebook.drawee.drawable.ScaleTypeDrawable;
-
-import static com.facebook.drawee.drawable.ScalingUtils.ScaleType;
+import javax.annotation.Nullable;
 
 /**
  * A class that contains helper methods for wrapping and rounding.
@@ -296,6 +292,7 @@ public class WrappingUtils {
     rounded.setRadii(roundingParams.getCornersRadii());
     rounded.setBorder(roundingParams.getBorderColor(), roundingParams.getBorderWidth());
     rounded.setPadding(roundingParams.getPadding());
+    rounded.setScaleDownInsideBorders(roundingParams.getScaleDownInsideBorders());
   }
 
   /**
@@ -306,6 +303,7 @@ public class WrappingUtils {
     rounded.setRadius(0);
     rounded.setBorder(Color.TRANSPARENT, 0);
     rounded.setPadding(0);
+    rounded.setScaleDownInsideBorders(false);
   }
 
   /**

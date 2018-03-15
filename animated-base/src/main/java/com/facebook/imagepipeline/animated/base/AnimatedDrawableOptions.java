@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.animated.base;
@@ -12,7 +10,7 @@ package com.facebook.imagepipeline.animated.base;
 import javax.annotation.concurrent.Immutable;
 
 /**
- * Options for creating {@link AnimatableDrawable}.
+ * Options for creating {@link com.facebook.fresco.animation.drawable.AnimatedDrawable2}.
  */
 @Immutable
 public class AnimatedDrawableOptions {

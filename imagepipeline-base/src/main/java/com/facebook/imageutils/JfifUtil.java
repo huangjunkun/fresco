@@ -1,19 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imageutils;
 
+import android.media.ExifInterface;
+import com.facebook.common.internal.Preconditions;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-
-import com.facebook.common.internal.Preconditions;
 
 /**
  * Util for obtaining information from JPEG file.
@@ -60,18 +58,21 @@ public class JfifUtil {
 
   /**
    * Get orientation information from jpeg input stream.
+   *
    * @param is the input stream of jpeg image
-   * @return orientation: 1/8/3/6. Returns 0 if there is no valid orientation information.
+   * @return orientation: 1/8/3/6. Returns {@value
+   *     android.media.ExifInterface#ORIENTATION_UNDEFINED} if there is no valid orientation
+   *     information.
    */
   public static int getOrientation(InputStream is) {
     try {
       int length = moveToAPP1EXIF(is);
       if (length == 0) {
-        return 0; // unknown orientation
+        return ExifInterface.ORIENTATION_UNDEFINED;
       }
       return TiffUtil.readOrientationFromTIFF(is, length);
     } catch (IOException ioe) {
-      return 0;
+      return ExifInterface.ORIENTATION_UNDEFINED;
     }
   }
 

@@ -1,16 +1,25 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.concurrent.GuardedBy;
+import static org.junit.Assert.*;
+import static org.mockito.Matchers.*;
+import static org.mockito.Mockito.*;
 
+import android.os.SystemClock;
+import com.facebook.common.internal.Throwables;
+import com.facebook.common.memory.ByteArrayPool;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferFactory;
+import com.facebook.common.memory.PooledByteBufferOutputStream;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.common.Priority;
+import com.facebook.imagepipeline.request.ImageRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
@@ -18,18 +27,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
-import android.os.SystemClock;
-
-import com.facebook.common.internal.Throwables;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.imagepipeline.common.Priority;
-import com.facebook.imagepipeline.memory.ByteArrayPool;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
-import com.facebook.imagepipeline.memory.PooledByteBufferOutputStream;
-import com.facebook.imagepipeline.request.ImageRequest;
-
+import javax.annotation.concurrent.GuardedBy;
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
@@ -39,10 +37,6 @@ import org.powermock.core.classloader.annotations.*;
 import org.powermock.modules.junit4.rule.*;
 import org.robolectric.*;
 import org.robolectric.annotation.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.*;
 
 @RunWith(RobolectricTestRunner.class)
 @PowerMockIgnore({ "org.mockito.*", "org.robolectric.*", "android.*" })
@@ -74,7 +68,6 @@ public class NetworkFetchProducerTest {
   public void setUp() {
     MockitoAnnotations.initMocks(this);
     PowerMockito.mockStatic(SystemClock.class);
-    when(mImageRequest.getProgressiveRenderingEnabled()).thenReturn(true);
     mNetworkFetchProducer = new NetworkFetchProducer(
         mPooledByteBufferFactory,
         mByteArrayPool,
@@ -118,6 +111,8 @@ public class NetworkFetchProducerTest {
         eq(NetworkFetchProducer.PRODUCER_NAME),
         any(RuntimeException.class),
         isNull(Map.class));
+    verify(mProducerListener)
+        .onUltimateProducerReached(mRequestId, NetworkFetchProducer.PRODUCER_NAME, false);
   }
 
   @Test(timeout = 5000)
@@ -133,7 +128,7 @@ public class NetworkFetchProducerTest {
     // Consumer should not be notified before any data is read
     inputStream.waitUntilReadingThreadBlocked();
     verify(mPooledByteBufferFactory).newOutputStream();
-    verify(mConsumer, never()).onNewResult(any(CloseableReference.class), anyBoolean());
+    verify(mConsumer, never()).onNewResult(any(CloseableReference.class), anyInt());
     verifyPooledByteBufferUsed(0);
 
     // Allow NetworkFetchProducer to read 1024 bytes and check that consumer is not notified
@@ -141,7 +136,7 @@ public class NetworkFetchProducerTest {
     inputStream.waitUntilReadingThreadBlocked();
     inputStream.increaseBytesToRead(1024);
     inputStream.waitUntilReadingThreadBlocked();
-    verify(mConsumer, never()).onNewResult(any(CloseableReference.class), anyBoolean());
+    verify(mConsumer, never()).onNewResult(any(CloseableReference.class), anyInt());
     verifyPooledByteBufferUsed(0);
 
     inputStream.signalEof();
@@ -152,7 +147,7 @@ public class NetworkFetchProducerTest {
         NetworkFetchProducer.PRODUCER_NAME,
         NetworkFetchProducer.INTERMEDIATE_RESULT_PRODUCER_EVENT);
     // Test final result
-    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(true));
+    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(Consumer.IS_LAST));
     verifyPooledByteBufferUsed(1);
     // When everything is over, pooled byte buffer output stream should be closed
     verify(mPooledByteBufferOutputStream).close();
@@ -171,7 +166,7 @@ public class NetworkFetchProducerTest {
     // Consumer should not be notified before any data is read
     inputStream.waitUntilReadingThreadBlocked();
     verify(mPooledByteBufferFactory).newOutputStream();
-    verify(mConsumer, never()).onNewResult(any(CloseableReference.class), anyBoolean());
+    verify(mConsumer, never()).onNewResult(any(CloseableReference.class), anyInt());
     verifyPooledByteBufferUsed(0);
 
     // Allow NetworkFetchProducer to read 1024 bytes and check that consumer is notified once
@@ -181,7 +176,7 @@ public class NetworkFetchProducerTest {
         mRequestId,
         NetworkFetchProducer.PRODUCER_NAME,
         NetworkFetchProducer.INTERMEDIATE_RESULT_PRODUCER_EVENT);
-    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(false));
+    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(Consumer.NO_FLAGS));
     verifyPooledByteBufferUsed(1);
 
     // Read another 1024 bytes, but do not bump timer - consumer should not be notified
@@ -191,7 +186,7 @@ public class NetworkFetchProducerTest {
         mRequestId,
         NetworkFetchProducer.PRODUCER_NAME,
         NetworkFetchProducer.INTERMEDIATE_RESULT_PRODUCER_EVENT);
-    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(false));
+    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(Consumer.NO_FLAGS));
     verifyPooledByteBufferUsed(1);
 
     // Read another 1024 bytes - this time bump timer. Consumer should be notified
@@ -203,11 +198,11 @@ public class NetworkFetchProducerTest {
         mRequestId,
         NetworkFetchProducer.PRODUCER_NAME,
         NetworkFetchProducer.INTERMEDIATE_RESULT_PRODUCER_EVENT);
-    verify(mConsumer, times(2)).onNewResult(any(CloseableReference.class), eq(false));
+    verify(mConsumer, times(2)).onNewResult(any(CloseableReference.class), eq(Consumer.NO_FLAGS));
     verifyPooledByteBufferUsed(2);
 
     // Test final result
-    verify(mConsumer, times(0)).onNewResult(any(CloseableReference.class), eq(true));
+    verify(mConsumer, times(0)).onNewResult(any(CloseableReference.class), eq(Consumer.IS_LAST));
     inputStream.signalEof();
     requestHandlerFuture.get();
     verify(mProducerListener, times(2)).onProducerEvent(
@@ -216,7 +211,9 @@ public class NetworkFetchProducerTest {
         NetworkFetchProducer.INTERMEDIATE_RESULT_PRODUCER_EVENT);
     verify(mProducerListener).onProducerFinishWithSuccess(
         eq(mRequestId), eq(NetworkFetchProducer.PRODUCER_NAME), eq(mExtrasMap));
-    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(true));
+    verify(mProducerListener)
+        .onUltimateProducerReached(mRequestId, NetworkFetchProducer.PRODUCER_NAME, true);
+    verify(mConsumer, times(1)).onNewResult(any(CloseableReference.class), eq(Consumer.IS_LAST));
     verifyPooledByteBufferUsed(3);
 
     // When everything is over, pooled byte buffer output stream should be closed

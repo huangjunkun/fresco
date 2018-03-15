@@ -1,29 +1,25 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
+import static org.mockito.Mockito.*;
+
+import com.facebook.common.internal.Supplier;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.facebook.common.internal.Supplier;
-
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
 import org.robolectric.*;
 import org.robolectric.annotation.*;
-
-import static org.mockito.Mockito.*;
 
 @RunWith(RobolectricTestRunner.class)
 @Config(manifest= Config.NONE)
@@ -96,9 +92,11 @@ public class StatefulProducerRunnableTest {
     doReturn(true).when(mProducerListener).requiresExtraMap(REQUEST_ID);
     doReturn(mResult).when(mResultSupplier).get();
     mStatefulProducerRunnable.run();
-    verify(mConsumer).onNewResult(mResult, true);
+    verify(mConsumer).onNewResult(mResult, Consumer.IS_LAST);
     verify(mProducerListener).onProducerStart(REQUEST_ID, PRODUCER_NAME);
     verify(mProducerListener).onProducerFinishWithSuccess(REQUEST_ID, PRODUCER_NAME, mSuccessMap);
+    verify(mProducerListener, never())
+        .onUltimateProducerReached(anyString(), anyString(), anyBoolean());
     verify(mResult).close();
   }
 
@@ -106,9 +104,11 @@ public class StatefulProducerRunnableTest {
   public void testOnSuccess_noExtraMap() throws IOException {
     doReturn(mResult).when(mResultSupplier).get();
     mStatefulProducerRunnable.run();
-    verify(mConsumer).onNewResult(mResult, true);
+    verify(mConsumer).onNewResult(mResult, Consumer.IS_LAST);
     verify(mProducerListener).onProducerStart(REQUEST_ID, PRODUCER_NAME);
     verify(mProducerListener).onProducerFinishWithSuccess(REQUEST_ID, PRODUCER_NAME, null);
+    verify(mProducerListener, never())
+        .onUltimateProducerReached(anyString(), anyString(), anyBoolean());
     verify(mResult).close();
   }
 
@@ -122,6 +122,8 @@ public class StatefulProducerRunnableTest {
         REQUEST_ID,
         PRODUCER_NAME,
         mCancellationMap);
+    verify(mProducerListener, never())
+        .onUltimateProducerReached(anyString(), anyString(), anyBoolean());
   }
 
   @Test
@@ -130,6 +132,8 @@ public class StatefulProducerRunnableTest {
     verify(mConsumer).onCancellation();
     verify(mProducerListener).onProducerStart(REQUEST_ID, PRODUCER_NAME);
     verify(mProducerListener).onProducerFinishWithCancellation(REQUEST_ID, PRODUCER_NAME, null);
+    verify(mProducerListener, never())
+        .onUltimateProducerReached(anyString(), anyString(), anyBoolean());
   }
 
 
@@ -145,6 +149,8 @@ public class StatefulProducerRunnableTest {
         PRODUCER_NAME,
         mException,
         mFailureMap);
+    verify(mProducerListener, never())
+        .onUltimateProducerReached(anyString(), anyString(), anyBoolean());
   }
 
   @Test
@@ -158,5 +164,7 @@ public class StatefulProducerRunnableTest {
         PRODUCER_NAME,
         mException,
         null);
+    verify(mProducerListener, never())
+        .onUltimateProducerReached(anyString(), anyString(), anyBoolean());
   }
 }

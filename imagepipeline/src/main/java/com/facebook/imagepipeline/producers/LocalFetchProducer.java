@@ -1,31 +1,21 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import android.os.Build;
-
-import java.io.File;
-import java.io.FileInputStream;
+import com.facebook.common.internal.Closeables;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferFactory;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.request.ImageRequest;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.concurrent.Executor;
-
-import com.facebook.common.internal.Closeables;
-import com.facebook.common.internal.Supplier;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.common.util.ByteConstants;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
-import com.facebook.imagepipeline.request.ImageRequest;
-
 
 /**
  * Represents a local fetch producer.
@@ -34,16 +24,12 @@ public abstract class LocalFetchProducer implements Producer<EncodedImage> {
 
   private final Executor mExecutor;
   private final PooledByteBufferFactory mPooledByteBufferFactory;
-  private final boolean mDecodeFileDescriptorEnabledForKitKat;
 
   protected LocalFetchProducer(
       Executor executor,
-      PooledByteBufferFactory pooledByteBufferFactory,
-      boolean fileDescriptorEnabled) {
+      PooledByteBufferFactory pooledByteBufferFactory) {
     mExecutor = executor;
     mPooledByteBufferFactory = pooledByteBufferFactory;
-    mDecodeFileDescriptorEnabledForKitKat = fileDescriptorEnabled &&
-        Build.VERSION.SDK_INT == Build.VERSION_CODES.KITKAT;
   }
 
   @Override
@@ -65,9 +51,11 @@ public abstract class LocalFetchProducer implements Producer<EncodedImage> {
           protected EncodedImage getResult() throws Exception {
             EncodedImage encodedImage = getEncodedImage(imageRequest);
             if (encodedImage == null) {
+              listener.onUltimateProducerReached(requestId, getProducerName(), false);
               return null;
             }
             encodedImage.parseMetaData();
+            listener.onUltimateProducerReached(requestId, getProducerName(), true);
             return encodedImage;
           }
 
@@ -108,31 +96,7 @@ public abstract class LocalFetchProducer implements Producer<EncodedImage> {
   protected EncodedImage getEncodedImage(
       InputStream inputStream,
       int length) throws IOException {
-    Runtime runTime = Runtime.getRuntime();
-    long javaMax = runTime.maxMemory();
-    long javaUsed = runTime.totalMemory() - runTime.freeMemory();
-    long javaFree = Math.min(javaMax - javaUsed, 8 * ByteConstants.MB);
-    if (mDecodeFileDescriptorEnabledForKitKat && inputStream instanceof FileInputStream &&
-        javaMax >= 64 * javaFree) {
-      return getInputStreamBackedEncodedImage(new File(inputStream.toString()), length);
-    } else {
-      return getByteBufferBackedEncodedImage(inputStream, length);
-    }
-  }
-
-  protected EncodedImage getInputStreamBackedEncodedImage(
-      final File file,
-      int length) throws IOException {
-    Supplier<FileInputStream> sup = new Supplier<FileInputStream>() {
-      @Override public FileInputStream get() {
-        try {
-          return new FileInputStream(file);
-        } catch (IOException ioe) {
-          throw new RuntimeException(ioe);
-        }
-      }
-    };
-    return new EncodedImage(sup, length);
+    return getByteBufferBackedEncodedImage(inputStream, length);
   }
 
   /**

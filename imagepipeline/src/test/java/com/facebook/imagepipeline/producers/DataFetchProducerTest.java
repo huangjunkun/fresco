@@ -1,26 +1,22 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
+import static org.junit.Assert.*;
+
+import com.facebook.imageformat.DefaultImageFormats;
+import com.facebook.imageformat.ImageFormatChecker;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-
-import com.facebook.imageformat.ImageFormat;
-import com.facebook.imageformat.ImageFormatChecker;
-
 import org.junit.*;
 import org.junit.runner.*;
 import org.robolectric.*;
 import org.robolectric.annotation.*;
-
-import static org.junit.Assert.*;
 
 /**
  * Unit test for DataFetchProducer
@@ -56,6 +52,8 @@ public class DataFetchProducerTest {
             "g7JpJHxyendzWTBfX0cxOnKPjgBzi4diinWGdkF8kjdfnycQZXZeYGejmJlZeGl9i2icVqaNVailT6F5iJ9" +
             "0m6mvuTS4OK05M0vDk0Q4XUtwvKOzrcd3iq9uisF81M1OIcR7lEewwcLp7tuNNkM3uNna3F2JQFo97Vriy/" +
             "Xl4/f1cf5VWzXyym7PHhhx4dbgYKAAA7");
-    assertEquals(ImageFormat.GIF, ImageFormatChecker.getImageFormat(new ByteArrayInputStream(gif)));
+    assertEquals(
+        DefaultImageFormats.GIF,
+        ImageFormatChecker.getImageFormat(new ByteArrayInputStream(gif)));
   }
 }

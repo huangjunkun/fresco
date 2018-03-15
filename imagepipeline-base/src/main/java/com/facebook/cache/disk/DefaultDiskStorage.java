@@ -1,27 +1,14 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.cache.disk;
 
 import android.os.Environment;
-import javax.annotation.Nullable;
-
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Locale;
-import java.util.concurrent.TimeUnit;
-
+import android.support.annotation.StringDef;
 import com.facebook.binaryresource.BinaryResource;
 import com.facebook.binaryresource.FileBinaryResource;
 import com.facebook.cache.common.CacheErrorLogger;
@@ -34,6 +21,16 @@ import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.VisibleForTesting;
 import com.facebook.common.time.Clock;
 import com.facebook.common.time.SystemClock;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.TimeUnit;
+import javax.annotation.Nullable;
 
 /**
  * The default disk storage implementation. Subsumes both 'simple' and 'sharded' implementations
@@ -117,21 +114,30 @@ public class DefaultDiskStorage implements DiskStorage {
   private static boolean isExternal(File directory, CacheErrorLogger cacheErrorLogger) {
     boolean state = false;
     String appCacheDirPath = null;
-    File extStoragePath = Environment.getExternalStorageDirectory();
-    if (extStoragePath != null) {
-      String cacheDirPath = extStoragePath.toString();
-      try {
-        appCacheDirPath = directory.getCanonicalPath();
-        if (appCacheDirPath.contains(cacheDirPath)) {
-          state = true;
+
+    try {
+      File extStoragePath = Environment.getExternalStorageDirectory();
+      if (extStoragePath != null) {
+        String cacheDirPath = extStoragePath.toString();
+        try {
+          appCacheDirPath = directory.getCanonicalPath();
+          if (appCacheDirPath.contains(cacheDirPath)) {
+            state = true;
+          }
+        } catch (IOException e) {
+          cacheErrorLogger.logError(
+              CacheErrorLogger.CacheErrorCategory.OTHER,
+              TAG,
+              "failed to read folder to check if external: " + appCacheDirPath,
+              e);
         }
-      } catch (IOException e) {
-        cacheErrorLogger.logError(
-            CacheErrorLogger.CacheErrorCategory.OTHER,
-            TAG,
-            "failed to read folder to check if external: " + appCacheDirPath,
-            e);
       }
+    } catch (Exception e) {
+      cacheErrorLogger.logError(
+          CacheErrorLogger.CacheErrorCategory.OTHER,
+          TAG,
+          "failed to get the external storage directory!",
+          e);
     }
     return state;
   }
@@ -561,24 +567,22 @@ public class DefaultDiskStorage implements DiskStorage {
    * CONTENT: the file that has the content
    * TEMP: temporal files, used to write the content until they are switched to CONTENT files
    */
-  private static enum FileType {
-    CONTENT(CONTENT_FILE_EXTENSION),
-    TEMP(TEMP_FILE_EXTENSION);
+  @StringDef ({
+      FileType.CONTENT,
+      FileType.TEMP,
+  })
+  public @interface FileType {
+    String CONTENT = CONTENT_FILE_EXTENSION;
+    String TEMP = TEMP_FILE_EXTENSION;
+  }
 
-    public final String extension;
-
-    FileType(String extension) {
-      this.extension = extension;
+  private static @Nullable @FileType String getFileTypefromExtension(String extension) {
+    if (CONTENT_FILE_EXTENSION.equals(extension)) {
+      return FileType.CONTENT;
+    } else if (TEMP_FILE_EXTENSION.equals(extension)) {
+      return FileType.TEMP;
     }
-
-    public static FileType fromExtension(String extension) {
-      if (CONTENT_FILE_EXTENSION.equals(extension)) {
-        return CONTENT;
-      } else if (TEMP_FILE_EXTENSION.equals(extension)) {
-        return TEMP;
-      }
-      return null;
-    }
+    return null;
   }
 
   /**
@@ -588,10 +592,10 @@ public class DefaultDiskStorage implements DiskStorage {
    */
   private static class FileInfo {
 
-    public final FileType type;
+    public final @FileType String type;
     public final String resourceId;
 
-    private FileInfo(FileType type, String resourceId) {
+    private FileInfo(@FileType String type, String resourceId) {
       this.type = type;
       this.resourceId = resourceId;
     }
@@ -602,7 +606,7 @@ public class DefaultDiskStorage implements DiskStorage {
     }
 
     public String toPath(String parentPath) {
-      return parentPath + File.separator + resourceId + type.extension;
+      return parentPath + File.separator + resourceId + type;
     }
 
     public File createTempFile(File parent) throws IOException {
@@ -618,7 +622,7 @@ public class DefaultDiskStorage implements DiskStorage {
         return null; // no name part
       }
       String ext = name.substring(pos);
-      FileType type = FileType.fromExtension(ext);
+      @FileType String type = getFileTypefromExtension(ext);
       if (type == null) {
         return null; // unknown!
       }

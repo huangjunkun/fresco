@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <android/bitmap.h>
@@ -95,7 +93,7 @@ static void setBitmapSize(JNIEnv* env, jobject bitmapOptions, int image_width, i
 }
 
 static jobject createBitmap(JNIEnv* env, int image_width, int image_height, jobject bitmapOptions) {
-  jobject bitmap = env->CallStaticObjectMethod(bitmapClass, createBitmapFunction, image_width, image_height, bitmapOptions);
+  jobject bitmap = env->CallStaticObjectMethod(webpBitmapFactoryClass, createBitmapFunction, image_width, image_height, bitmapOptions);
   return bitmap;
 }
 
@@ -104,8 +102,7 @@ jobject doDecode(
     uint8_t* encoded_image,
     unsigned encoded_image_length,
     jobject bitmapOptions,
-    jfloat scale,
-    jobject inBitmap) {
+    jfloat scale) {
 
   // Options manipulation is taken from https://github.com/android/platform_frameworks_base/blob/master/core/jni/android/graphics/BitmapFactory.cpp
   int image_width = 0;
@@ -146,7 +143,7 @@ jobject doDecode(
     return JNI_FALSE;
   }
 
-  config.output.colorspace = MODE_RGBA;
+  config.output.colorspace = MODE_rgbA;
   config.output.u.RGBA.rgba = (uint8_t*) raw_pixels;
   config.output.u.RGBA.stride = image_width * 4;
   config.output.u.RGBA.size = image_width * image_height * 4;
@@ -173,11 +170,10 @@ static jobject nativeDecodeStream(
   jobject is,
   jobject bitmapOptions,
   jfloat scale,
-  jobject inBitmap,
   jbyteArray inTempStorage) {
   auto encoded_image = readStreamFully(env, is, inTempStorage);
   if (!encoded_image.empty()) {
-    return doDecode(env, encoded_image.data(), encoded_image.size(), bitmapOptions, scale, inBitmap);
+    return doDecode(env, encoded_image.data(), encoded_image.size(), bitmapOptions, scale);
   }
   return {};
 
@@ -191,7 +187,6 @@ static jobject nativeDecodeByteArray(
   jint length,
   jobject bitmapOptions,
   jfloat scale,
-  jobject inBitmap,
   jbyteArray inTempStorage) {
 
     // get image into decoded heap
@@ -204,7 +199,7 @@ static jobject nativeDecodeByteArray(
       env->ReleaseByteArrayElements(array, data, JNI_ABORT);
       RETURN_NULL_IF_EXCEPTION(env);
     }
-    jobject bitmap = doDecode(env, reinterpret_cast<uint8_t*>(data) + offset, length, bitmapOptions, scale, inBitmap);
+    jobject bitmap = doDecode(env, reinterpret_cast<uint8_t*>(data) + offset, length, bitmapOptions, scale);
     env->ReleaseByteArrayElements(array, data, JNI_ABORT);
     RETURN_NULL_IF_EXCEPTION(env);
 
@@ -226,8 +221,8 @@ static jlong nativeSeek(JNIEnv* env, jclass clazz, jobject fileDescriptor, jlong
 }
 
 static JNINativeMethod methods[] = {
-    {"nativeDecodeStream",    "(Ljava/io/InputStream;Landroid/graphics/BitmapFactory$Options;FLandroid/graphics/Bitmap;[B)Landroid/graphics/Bitmap;", (void *)&nativeDecodeStream},
-    {"nativeDecodeByteArray", "([BIILandroid/graphics/BitmapFactory$Options;FLandroid/graphics/Bitmap;[B)Landroid/graphics/Bitmap;", (void *)&nativeDecodeByteArray},
+    {"nativeDecodeStream",    "(Ljava/io/InputStream;Landroid/graphics/BitmapFactory$Options;F[B)Landroid/graphics/Bitmap;", (void *)&nativeDecodeStream},
+    {"nativeDecodeByteArray", "([BIILandroid/graphics/BitmapFactory$Options;F[B)Landroid/graphics/Bitmap;", (void *)&nativeDecodeByteArray},
     {"nativeSeek",            "(Ljava/io/FileDescriptor;JZ)J",                    (void *)&nativeSeek},
 };
 
@@ -361,7 +356,11 @@ JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     if (initWebPImage(env) != JNI_OK) {
       return -1;
     }
+  } else {
+     jboolean flag = env->ExceptionCheck();
+     if (flag) {
+        env->ExceptionClear();
+     }
   }
-
   return JNI_VERSION_1_6;
 }

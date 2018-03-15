@@ -1,27 +1,24 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imageformat;
 
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+
+import com.facebook.soloader.SoLoader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-import com.facebook.common.soloader.SoLoaderShim;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertSame;
 
 /**
  * Tests {@link ImageFormatChecker}
@@ -30,70 +27,70 @@ import static org.junit.Assert.assertSame;
 public class ImageFormatCheckerTest {
 
   static {
-    SoLoaderShim.setInTestMode();
+    SoLoader.setInTestMode();
   }
 
   @Test
   public void testSimpleWebps() throws Exception {
     singleImageTypeTest(
         getNames(2, "webps/%d_webp_plain.webp"),
-        ImageFormat.WEBP_SIMPLE);
+        DefaultImageFormats.WEBP_SIMPLE);
   }
 
   @Test
   public void testLosslessWebps() throws Exception {
     singleImageTypeTest(
         getNames(5, "webps/%d_webp_ll.webp"),
-        ImageFormat.WEBP_LOSSLESS);
+        DefaultImageFormats.WEBP_LOSSLESS);
   }
 
   @Test
   public void testExtendedWebpsWithAlpha() throws Exception {
     singleImageTypeTest(
         getNames(5, "webps/%d_webp_ea.webp"),
-        ImageFormat.WEBP_EXTENDED_WITH_ALPHA);
+        DefaultImageFormats.WEBP_EXTENDED_WITH_ALPHA);
   }
 
   @Test
   public void testExtendedWebpsWithoutAlpha() throws Exception {
     singleImageTypeTest(
         getName("webps/1_webp_e.webp"),
-        ImageFormat.WEBP_EXTENDED);
+        DefaultImageFormats.WEBP_EXTENDED);
   }
 
   @Test
   public void testAnimatedWebps() throws Exception {
     singleImageTypeTest(
         getName("webps/1_webp_anim.webp"),
-        ImageFormat.WEBP_ANIMATED);
+        DefaultImageFormats.WEBP_ANIMATED);
   }
 
   @Test
   public void testJpegs() throws Exception {
     singleImageTypeTest(
         getNames(5, "jpegs/%d.jpeg"),
-        ImageFormat.JPEG);
+        DefaultImageFormats.JPEG);
   }
 
   @Test
   public void testPngs() throws Exception {
     singleImageTypeTest(
         getNames(5, "pngs/%d.png"),
-        ImageFormat.PNG);
+        DefaultImageFormats.PNG);
   }
 
   @Test
   public void testGifs() throws Exception {
     singleImageTypeTest(
         getNames(5, "gifs/%d.gif"),
-        ImageFormat.GIF);
+        DefaultImageFormats.GIF);
   }
 
   @Test
   public void testBmps() throws Exception {
     singleImageTypeTest(
         getNames(5, "bmps/%d.bmp"),
-        ImageFormat.BMP);
+        DefaultImageFormats.BMP);
   }
 
   private void singleImageTypeTest(

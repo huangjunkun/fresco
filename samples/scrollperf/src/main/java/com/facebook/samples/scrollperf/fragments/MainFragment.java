@@ -11,10 +11,14 @@
  */
 package com.facebook.samples.scrollperf.fragments;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.annotation.Nullable;
+import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.Fragment;
+import android.support.v7.widget.GridLayoutManager;
 import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.view.LayoutInflater;
@@ -24,20 +28,23 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ListAdapter;
 import android.widget.ListView;
-
 import com.facebook.samples.scrollperf.R;
 import com.facebook.samples.scrollperf.conf.Config;
+import com.facebook.samples.scrollperf.conf.Const;
 import com.facebook.samples.scrollperf.data.SimpleAdapter;
 import com.facebook.samples.scrollperf.data.impl.ContentProviderSimpleAdapter;
 import com.facebook.samples.scrollperf.data.impl.DistinctUriDecorator;
 import com.facebook.samples.scrollperf.data.impl.LocalResourceSimpleAdapter;
 import com.facebook.samples.scrollperf.fragments.recycler.DraweeViewAdapter;
 import com.facebook.samples.scrollperf.fragments.recycler.DraweeViewListAdapter;
+import com.facebook.samples.scrollperf.instrumentation.PerfListener;
 import com.facebook.samples.scrollperf.util.UI;
 
 public class MainFragment extends Fragment {
 
   public static final String TAG = MainFragment.class.getSimpleName();
+
+  private static final int REQUEST_READ_EXTERNAL_ID = 1;
 
   private RecyclerView mRecyclerView;
 
@@ -51,10 +58,15 @@ public class MainFragment extends Fragment {
 
   private Config mConfig;
 
+  boolean mDistinctUriCompatible = true;
+
+  private PerfListener mPerfListener;
+
   @Override
   public void onCreate(@Nullable Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
     setHasOptionsMenu(true);
+    mPerfListener = new PerfListener();
   }
 
   @Override
@@ -68,17 +80,22 @@ public class MainFragment extends Fragment {
     // We use a different layout based on the type of output
     final View layout;
     switch (mConfig.recyclerLayoutType) {
-      case "recyclerview_recycler_layout":
+      case Const.RECYCLER_VIEW_LAYOUT_VALUE:
         layout = inflater.inflate(R.layout.content_recyclerview, container, false);
         initializeRecyclerView(layout);
         break;
-      case "listview_recycler_layout":
+      case Const.LISTVIEW_LAYOUT_VALUE:
         layout = inflater.inflate(R.layout.content_listview, container, false);
         initializeListView(layout);
+        break;
+      case Const.GRID_RECYCLER_VIEW_LAYOUT_VALUE:
+        layout = inflater.inflate(R.layout.content_recyclerview, container, false);
+        initializeGridRecyclerView(layout);
         break;
       default:
         throw new IllegalStateException("Recycler Layout not supported");
     }
+    updateAdapter();
     return layout;
   }
 
@@ -96,44 +113,107 @@ public class MainFragment extends Fragment {
     layoutManager.setOrientation(LinearLayoutManager.VERTICAL);
     layoutManager.scrollToPosition(0);
     mRecyclerView.setLayoutManager(layoutManager);
-    // Create the Adapter
-    mDraweeViewAdapter = new DraweeViewAdapter(getContext(), mSimpleAdapter, mConfig);
-    mRecyclerView.setAdapter(mDraweeViewAdapter);
+  }
+
+  private void initializeGridRecyclerView(final View layout) {
+    // Get RecyclerView
+    mRecyclerView = UI.findViewById(layout, R.id.recycler_view);
+    // Choose the LayoutManager
+    GridLayoutManager layoutManager = new GridLayoutManager(getContext(), mConfig.gridSpanCount);
+    layoutManager.setOrientation(LinearLayoutManager.VERTICAL);
+    layoutManager.scrollToPosition(0);
+    mRecyclerView.setLayoutManager(layoutManager);
   }
 
   private void initializeListView(final View layout) {
     // get the ListView
     mListView = UI.findViewById(layout, R.id.list_view);
-    // Create the Adapter
-    mListAdapter = new DraweeViewListAdapter(mSimpleAdapter, mConfig);
-    // Set the adapter
-    mListView.setAdapter(mListAdapter);
   }
 
   private SimpleAdapter<Uri> initializeSimpleAdapter(final Config config) {
-    boolean distinctUriCompatible = true;
     SimpleAdapter<Uri> simpleAdapter = null;
     switch (config.dataSourceType) {
-      case "local_resource_uris":
+      case Const.LOCAL_RESOURCE_URIS:
         simpleAdapter = LocalResourceSimpleAdapter
                 .getEagerAdapter(getContext(), R.array.example_uris);
         break;
-      case "local_internal_photo_uris":
-        simpleAdapter = ContentProviderSimpleAdapter.getInternalPhotoSimpleAdapter(getContext());
-        distinctUriCompatible = false;
+      case Const.LOCAL_RESOURCE_WEBP_URIS:
+        simpleAdapter = LocalResourceSimpleAdapter
+            .getEagerAdapter(getContext(), R.array.example_webp_uris);
         break;
-      case "local_external_photo_uris":
-        simpleAdapter = ContentProviderSimpleAdapter.getExternalPhotoSimpleAdapter(getContext());
-        distinctUriCompatible = false;
+      case Const.LOCAL_RESOURCE_PNG_URIS:
+        simpleAdapter = LocalResourceSimpleAdapter
+            .getEagerAdapter(getContext(), R.array.example_png_uris);
         break;
-    }
-    if (config.infiniteDataSource) {
-      simpleAdapter = SimpleAdapter.Util.makeItInfinite(simpleAdapter);
-      if (distinctUriCompatible && config.distinctUriDataSource) {
-        simpleAdapter = SimpleAdapter.Util
-                .decorate(simpleAdapter, DistinctUriDecorator.SINGLETON);
-      }
+      case Const.LOCAL_INTERNAL_PHOTO_URIS:
+        simpleAdapter = ContentProviderSimpleAdapter.getInternalPhotoSimpleAdapter(getActivity());
+        mDistinctUriCompatible = false;
+        break;
+      case Const.LOCAL_EXTERNAL_PHOTO_URIS:
+        simpleAdapter = getExternalPhotoSimpleAdapter();
+        mDistinctUriCompatible = false;
+        break;
     }
     return simpleAdapter;
+  }
+
+  private void updateAdapter() {
+    if (mSimpleAdapter == null) {
+      return;
+    }
+    if (mConfig.infiniteDataSource) {
+      mSimpleAdapter = SimpleAdapter.Util.makeItInfinite(mSimpleAdapter);
+      if (mDistinctUriCompatible && mConfig.distinctUriDataSource) {
+        mSimpleAdapter = SimpleAdapter.Util
+            .decorate(mSimpleAdapter, DistinctUriDecorator.SINGLETON);
+      }
+    }
+    switch (mConfig.recyclerLayoutType) {
+      case Const.RECYCLER_VIEW_LAYOUT_VALUE:
+      case Const.GRID_RECYCLER_VIEW_LAYOUT_VALUE:
+        // Create the Adapter
+        mDraweeViewAdapter = new DraweeViewAdapter(
+            getContext(),
+            mSimpleAdapter,
+            mConfig,
+            mPerfListener);
+        mRecyclerView.setAdapter(mDraweeViewAdapter);
+        break;
+      case Const.LISTVIEW_LAYOUT_VALUE:
+        // Create the Adapter
+        mListAdapter = new DraweeViewListAdapter(
+            getContext(),
+            mSimpleAdapter,
+            mConfig,
+            mPerfListener);
+        // Set the adapter
+        mListView.setAdapter(mListAdapter);
+        break;
+      default:
+        throw new IllegalStateException("Recycler Layout not supported");
+    }
+  }
+
+  private SimpleAdapter<Uri> getExternalPhotoSimpleAdapter() {
+    if (ActivityCompat.checkSelfPermission(getContext(), Manifest.permission.READ_EXTERNAL_STORAGE)
+        == PackageManager.PERMISSION_GRANTED) {
+      return ContentProviderSimpleAdapter.getExternalPhotoSimpleAdapter(getActivity());
+    } else {
+      requestPermissions(
+          new String[] {Manifest.permission.READ_EXTERNAL_STORAGE},
+          REQUEST_READ_EXTERNAL_ID);
+    }
+    return SimpleAdapter.Util.EMPTY_ADAPTER;
+  }
+
+  @Override
+  public void onRequestPermissionsResult(
+      int requestCode, String[] permissions, int[] grantResults) {
+    if (requestCode == REQUEST_READ_EXTERNAL_ID &&
+        grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+      mSimpleAdapter = ContentProviderSimpleAdapter.getExternalPhotoSimpleAdapter(getActivity());
+      updateAdapter();
+    }
+    super.onRequestPermissionsResult(requestCode, permissions, grantResults);
   }
 }

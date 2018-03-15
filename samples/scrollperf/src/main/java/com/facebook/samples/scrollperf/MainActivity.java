@@ -15,15 +15,16 @@ import android.os.Bundle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.MenuItem;
-
 import com.facebook.samples.scrollperf.fragments.MainFragment;
 import com.facebook.samples.scrollperf.fragments.SettingsFragment;
+import com.facebook.samples.scrollperf.util.SizeUtil;
 
 public class MainActivity extends AppCompatActivity {
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
+    SizeUtil.initSizeData(this);
     setContentView(R.layout.activity_main);
     Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
     toolbar.setTitle(R.string.app_name);

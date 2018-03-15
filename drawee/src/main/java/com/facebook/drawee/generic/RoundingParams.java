@@ -1,20 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.generic;
 
-import java.util.Arrays;
-
 import android.graphics.Color;
-
+import android.support.annotation.ColorInt;
 import com.facebook.common.internal.Preconditions;
 import com.facebook.drawee.drawable.ScalingUtils;
+import java.util.Arrays;
 
 /**
  * Class that encapsulates rounding parameters.
@@ -23,9 +20,12 @@ public class RoundingParams {
 
   public enum RoundingMethod {
     /**
-     * Draws rounded corners on top of the underlying drawable by overlaying a solid color which
-     * is specified by {@code setOverlayColor}. This option should only be used when the
-     * background beneath the underlying drawable is static and of the same solid color.
+     * Draws rounded corners on top of the underlying drawable by overlaying a solid color which is
+     * specified by {@code setOverlayColor}. This option should only be used when the background
+     * beneath the underlying drawable is static and of the same solid color.
+     *
+     * <p>Adding borders with this method will cause image edges to be trimmed off. Not noticeable
+     * if the color is opaque, but very noticeable with low opacity.
      */
     OVERLAY_COLOR,
 
@@ -34,6 +34,10 @@ public class RoundingParams {
      * method. It doesn't support animations, and it does not support any scale types other than
      * {@link ScalingUtils.ScaleType#CENTER_CROP}, {@link ScalingUtils.ScaleType#FOCUS_CROP} and
      * {@link ScalingUtils.ScaleType#FIT_XY}.
+     *
+     * If you use this rounding method with other scale types, such as
+     * {@link ScalingUtils.ScaleType#CENTER}, you won't get an Exception but the image might look
+     * wrong (e.g. repeated edges), especially in cases the source image is smaller than the view.
      */
     BITMAP_ONLY
   }
@@ -45,6 +49,7 @@ public class RoundingParams {
   private float mBorderWidth = 0;
   private int mBorderColor = Color.TRANSPARENT;
   private float mPadding = 0;
+  private boolean mScaleDownInsideBorders = false;
 
   /**
    *  Sets whether to round as circle.
@@ -140,7 +145,7 @@ public class RoundingParams {
    *
    * @param overlayColor overlay color
    */
-  public RoundingParams setOverlayColor(int overlayColor) {
+  public RoundingParams setOverlayColor(@ColorInt int overlayColor) {
     mOverlayColor = overlayColor;
     mRoundingMethod = RoundingMethod.OVERLAY_COLOR;
     return this;
@@ -185,7 +190,6 @@ public class RoundingParams {
 
   /**
    * Sets the border width
-   * @param color of the border
    * @param width of the width
    */
   public RoundingParams setBorderWidth(float width) {
@@ -202,9 +206,8 @@ public class RoundingParams {
   /**
    * Sets the border color
    * @param color of the border
-   * @param width of the width
    */
-  public RoundingParams setBorderColor(int color) {
+  public RoundingParams setBorderColor(@ColorInt int color) {
     mBorderColor = color;
     return this;
   }
@@ -219,7 +222,7 @@ public class RoundingParams {
    * @param color of the border
    * @param width of the width
    */
-  public RoundingParams setBorder(int color, float width) {
+  public RoundingParams setBorder(@ColorInt int color, float width) {
     Preconditions.checkArgument(width >= 0, "the border width cannot be < 0");
     mBorderWidth = width;
     mBorderColor = color;
@@ -239,6 +242,23 @@ public class RoundingParams {
   /** Gets the padding size */
   public float getPadding() {
     return mPadding;
+  }
+
+  /**
+   * Sets whether image should be scaled down inside borders.
+   *
+   * @param scaleDownInsideBorders whether image should be scaled down inside borders or borders
+   *     will be drawn over image
+   * @return modified instance
+   */
+  public RoundingParams setScaleDownInsideBorders(boolean scaleDownInsideBorders) {
+    mScaleDownInsideBorders = scaleDownInsideBorders;
+    return this;
+  }
+
+  /** Gets whether image should be scaled down inside borders. */
+  public boolean getScaleDownInsideBorders() {
+    return mScaleDownInsideBorders;
   }
 
   @Override
@@ -276,8 +296,11 @@ public class RoundingParams {
       return false;
     }
 
-    return Arrays.equals(mCornersRadii, that.mCornersRadii);
+    if (mScaleDownInsideBorders != that.mScaleDownInsideBorders) {
+      return false;
+    }
 
+    return Arrays.equals(mCornersRadii, that.mCornersRadii);
   }
 
   @Override
@@ -289,6 +312,7 @@ public class RoundingParams {
     result = 31 * result + (mBorderWidth != +0.0f ? Float.floatToIntBits(mBorderWidth) : 0);
     result = 31 * result + mBorderColor;
     result = 31 * result + (mPadding != +0.0f ? Float.floatToIntBits(mPadding) : 0);
+    result = 31 * result + (mScaleDownInsideBorders ? 1 : 0);
 
     return result;
   }

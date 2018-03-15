@@ -1,48 +1,11 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.cache;
-
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.CancellationException;
-import java.util.concurrent.atomic.AtomicBoolean;
-
-import com.facebook.binaryresource.BinaryResource;
-import com.facebook.cache.common.CacheKey;
-import com.facebook.cache.common.MultiCacheKey;
-import com.facebook.cache.common.SimpleCacheKey;
-import com.facebook.cache.common.WriterCallback;
-import com.facebook.cache.disk.FileCache;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
-import com.facebook.imagepipeline.memory.PooledByteStreams;
-import com.facebook.imagepipeline.testing.FakeClock;
-import com.facebook.imagepipeline.testing.TestExecutorService;
-
-import bolts.Task;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
-import org.powermock.modules.junit4.rule.PowerMockRule;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -57,6 +20,39 @@ import static org.mockito.Mockito.same;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
+
+import bolts.Task;
+import com.facebook.binaryresource.BinaryResource;
+import com.facebook.cache.common.CacheKey;
+import com.facebook.cache.common.MultiCacheKey;
+import com.facebook.cache.common.SimpleCacheKey;
+import com.facebook.cache.common.WriterCallback;
+import com.facebook.cache.disk.FileCache;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferFactory;
+import com.facebook.common.memory.PooledByteStreams;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.testing.FakeClock;
+import com.facebook.imagepipeline.testing.TestExecutorService;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.MockitoAnnotations;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
+import org.powermock.modules.junit4.rule.PowerMockRule;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
 @PowerMockIgnore({ "org.mockito.*", "org.robolectric.*", "android.*" })
@@ -146,24 +142,11 @@ public class BufferedDiskCacheTest {
     Task<EncodedImage> readTask = mBufferedDiskCache.get(mCacheKey, mIsCancelled);
     mReadPriorityExecutor.runUntilIdle();
     verify(mFileCache).getResource(eq(mCacheKey));
+    EncodedImage result = readTask.getResult();
     assertEquals(
         2,
-        readTask.getResult().getByteBufferRef()
-            .getUnderlyingReferenceTestOnly().getRefCountTestOnly());
-    assertSame(mPooledByteBuffer, readTask.getResult().getByteBufferRef().get());
-  }
-
-  @Test
-  public void testListQueriesDiskCache() throws Exception {
-    when(mFileCache.getResource(eq(mCacheKey))).thenReturn(mBinaryResource);
-    Task<EncodedImage> readTask = mBufferedDiskCache.get(mCacheKey, mIsCancelled);
-    mReadPriorityExecutor.runUntilIdle();
-    verify(mFileCache).getResource(eq(mCacheKey));
-    assertEquals(
-        2,
-        readTask.getResult().getByteBufferRef()
-            .getUnderlyingReferenceTestOnly().getRefCountTestOnly());
-    assertSame(mPooledByteBuffer, readTask.getResult().getByteBufferRef().get());
+        result.getByteBufferRef().getUnderlyingReferenceTestOnly().getRefCountTestOnly());
+    assertSame(mPooledByteBuffer, result.getByteBufferRef().get());
   }
 
   @Test
@@ -215,14 +198,6 @@ public class BufferedDiskCacheTest {
   }
 
   @Test
-  public void testCacheMissList() throws Exception {
-    Task<EncodedImage> readTask = mBufferedDiskCache.get(mCacheKey, mIsCancelled);
-    mReadPriorityExecutor.runUntilIdle();
-    verify(mFileCache).getResource(eq(mCacheKey));
-    assertNull(readTask.getResult());
-  }
-
-  @Test
   public void testPutBumpsRefCountBeforeSubmit() {
     mBufferedDiskCache.put(mCacheKey, mEncodedImage);
     assertEquals(3, mCloseableReference.getUnderlyingReferenceTestOnly().getRefCountTestOnly());
@@ -259,15 +234,15 @@ public class BufferedDiskCacheTest {
     when(mStagingArea.get(mCacheKey)).thenReturn(mEncodedImage);
     mReadPriorityExecutor.runUntilIdle();
 
-    assertSame(readTask.getResult(), mEncodedImage);
+    EncodedImage result = readTask.getResult();
+    assertSame(result, mEncodedImage);
     verify(mFileCache, never()).getResource(eq(mCacheKey));
     // Ref count should be equal to 3 (One for mCloseableReference, one that is cloned when
     // mEncodedImage is created and a third one that is cloned when the method getByteBufferRef is
     // called in EncodedImage).
     assertEquals(
         3,
-        mEncodedImage.getByteBufferRef()
-            .getUnderlyingReferenceTestOnly().getRefCountTestOnly());
+        result.getByteBufferRef().getUnderlyingReferenceTestOnly().getRefCountTestOnly());
   }
 
   @Test

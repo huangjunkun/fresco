@@ -1,24 +1,22 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.drawable;
+
+import static com.facebook.drawee.drawable.ScalingUtils.*;
 
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-
+import com.facebook.common.internal.Objects;
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.VisibleForTesting;
-
-import static com.facebook.drawee.drawable.ScalingUtils.*;
 
 /**
  * Drawable that can scale underlying drawable based on specified {@link ScaleType}
@@ -76,6 +74,10 @@ public class ScaleTypeDrawable extends ForwardingDrawable {
    * @param scaleType scale type to set
    */
   public void setScaleType(ScaleType scaleType) {
+    if (Objects.equal(mScaleType, scaleType)) {
+      return;
+    }
+
     mScaleType = scaleType;
     mScaleTypeState = null;
     configureBounds();
@@ -98,9 +100,14 @@ public class ScaleTypeDrawable extends ForwardingDrawable {
    * @param focusPoint focus point of the image
    */
   public void setFocusPoint(PointF focusPoint) {
+    if (Objects.equal(mFocusPoint, focusPoint)) {
+      return;
+    }
+
     if (mFocusPoint == null) {
       mFocusPoint = new PointF();
     }
+
     mFocusPoint.set(focusPoint);
     configureBounds();
     invalidateSelf();

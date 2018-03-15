@@ -1,17 +1,14 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.Nullable;
-
 import java.util.Map;
+import javax.annotation.Nullable;
 
 /**
  * Instrumentation for Producers.
@@ -68,6 +65,13 @@ public interface ProducerListener {
       String requestId,
       String producerName,
       @Nullable Map<String, String> extraMap);
+
+  /**
+   * Called when the producer which can create the final result for a given request has completed.
+   *
+   * <p> This can be used to determine which producer was best able to satisfy the request.
+   */
+  void onUltimateProducerReached(String requestId, String producerName, boolean successful);
 
   /**
    * @return true if listener makes use of extra map

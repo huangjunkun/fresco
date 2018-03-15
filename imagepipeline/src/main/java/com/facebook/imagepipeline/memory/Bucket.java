@@ -1,22 +1,19 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.memory;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.NotThreadSafe;
-
-import java.util.LinkedList;
-import java.util.Queue;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.logging.FLog;
+import java.util.LinkedList;
+import java.util.Queue;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * The Bucket is a constituent class of {@link BasePool}. The pool maintains its free values
@@ -43,6 +40,9 @@ import com.facebook.common.internal.VisibleForTesting;
 @NotThreadSafe
 @VisibleForTesting
 class Bucket<V> {
+
+  private static final String TAG = "BUCKET";
+
   public final int mItemSize; // size in bytes of items in this bucket
   public final int mMaxLength; // 'max' length for this bucket
   final Queue mFreeList; // the free list for this bucket, subclasses can vary type
@@ -117,9 +117,12 @@ class Bucket<V> {
    */
   public void release(V value) {
     Preconditions.checkNotNull(value);
-    Preconditions.checkState(mInUseLength > 0);
-    mInUseLength--;
-    addToFreeList(value);
+    if (mInUseLength > 0) {
+      mInUseLength--;
+      addToFreeList(value);
+    } else {
+      FLog.e(TAG, "Tried to release value %s from an empty bucket!", value);
+    }
   }
 
   void addToFreeList(V value) {

@@ -1,21 +1,16 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.animated.impl;
-
-import javax.annotation.concurrent.GuardedBy;
 
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Rect;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.imagepipeline.animated.base.AnimatedDrawableBackend;
@@ -24,6 +19,8 @@ import com.facebook.imagepipeline.animated.base.AnimatedImage;
 import com.facebook.imagepipeline.animated.base.AnimatedImageFrame;
 import com.facebook.imagepipeline.animated.base.AnimatedImageResult;
 import com.facebook.imagepipeline.animated.util.AnimatedDrawableUtil;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * An {@link AnimatedDrawableBackend} that renders {@link AnimatedImage}.
@@ -39,9 +36,11 @@ public class AnimatedDrawableBackendImpl implements AnimatedDrawableBackend {
   private final int[] mFrameTimestampsMs;
   private final int mDurationMs;
   private final AnimatedDrawableFrameInfo[] mFrameInfos;
+  private final Rect mRenderSrcRect = new Rect();
+  private final Rect mRenderDstRect = new Rect();
 
   @GuardedBy("this")
-  private Bitmap mTempBitmap;
+  private @Nullable Bitmap mTempBitmap;
 
   public AnimatedDrawableBackendImpl(
       AnimatedDrawableUtil animatedDrawableUtil,
@@ -185,6 +184,19 @@ public class AnimatedDrawableBackendImpl implements AnimatedDrawableBackend {
     }
   }
 
+  private synchronized void prepareTempBitmapForThisSize(int width, int height) {
+    // Different gif frames can be different size,
+    // So we need to ensure we can fit next frame to temporary bitmap
+    if (mTempBitmap != null
+        && (mTempBitmap.getWidth() < width || mTempBitmap.getHeight() < height)) {
+      clearTempBitmap();
+    }
+    if (mTempBitmap == null) {
+      mTempBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+    }
+    mTempBitmap.eraseColor(Color.TRANSPARENT);
+  }
+
   private void renderImageSupportsScaling(Canvas canvas, AnimatedImageFrame frame) {
     double xScale = (double) mRenderedBounds.width() / (double) mAnimatedImage.getWidth();
     double yScale = (double) mRenderedBounds.height() / (double) mAnimatedImage.getHeight();
@@ -195,45 +207,48 @@ public class AnimatedDrawableBackendImpl implements AnimatedDrawableBackend {
     int yOffset = (int) (frame.getYOffset() * yScale);
 
     synchronized (this) {
-      if (mTempBitmap == null) {
-        mTempBitmap = Bitmap.createBitmap(
-            mRenderedBounds.width(),
-            mRenderedBounds.height(),
-            Bitmap.Config.ARGB_8888);
-      }
-      mTempBitmap.eraseColor(Color.TRANSPARENT);
+      int renderedWidth = mRenderedBounds.width();
+      int renderedHeight = mRenderedBounds.height();
+      // Update the temp bitmap to be >= rendered dimensions
+      prepareTempBitmapForThisSize(renderedWidth, renderedHeight);
       frame.renderFrame(frameWidth, frameHeight, mTempBitmap);
-      canvas.drawBitmap(mTempBitmap, xOffset, yOffset, null);
+      // Temporary bitmap can be bigger than frame, so we should draw only rendered area of bitmap
+      mRenderSrcRect.set(0, 0, renderedWidth, renderedHeight);
+      mRenderDstRect.set(xOffset, yOffset, xOffset + renderedWidth, yOffset + renderedHeight);
+
+      canvas.drawBitmap(mTempBitmap, mRenderSrcRect, mRenderDstRect, null);
     }
   }
 
-  public void renderImageDoesNotSupportScaling(Canvas canvas, AnimatedImageFrame frame) {
+  private void renderImageDoesNotSupportScaling(Canvas canvas, AnimatedImageFrame frame) {
     int frameWidth = frame.getWidth();
     int frameHeight = frame.getHeight();
     int xOffset = frame.getXOffset();
     int yOffset = frame.getYOffset();
     synchronized (this) {
-      if (mTempBitmap == null) {
-        mTempBitmap = Bitmap.createBitmap(
-            mAnimatedImage.getWidth(),
-            mAnimatedImage.getHeight(),
-            Bitmap.Config.ARGB_8888);
-      }
-      mTempBitmap.eraseColor(Color.TRANSPARENT);
+      prepareTempBitmapForThisSize(frameWidth, frameHeight);
       frame.renderFrame(frameWidth, frameHeight, mTempBitmap);
+
+      // Temporary bitmap can be bigger than frame, so we should draw only rendered area of bitmap
+      mRenderSrcRect.set(0, 0, frameWidth, frameHeight);
+      mRenderDstRect.set(0, 0, frameWidth, frameHeight);
 
       float xScale = (float) mRenderedBounds.width() / (float) mAnimatedImage.getWidth();
       float yScale = (float) mRenderedBounds.height() / (float) mAnimatedImage.getHeight();
       canvas.save();
       canvas.scale(xScale, yScale);
       canvas.translate(xOffset, yOffset);
-      canvas.drawBitmap(mTempBitmap, 0, 0, null);
+      canvas.drawBitmap(mTempBitmap, mRenderSrcRect, mRenderDstRect, null);
       canvas.restore();
     }
   }
 
   @Override
   public synchronized void dropCaches() {
+    clearTempBitmap();
+  }
+
+  private synchronized void clearTempBitmap() {
     if (mTempBitmap != null) {
       mTempBitmap.recycle();
       mTempBitmap = null;

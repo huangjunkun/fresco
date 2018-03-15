@@ -1,29 +1,32 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.concurrent.Executors;
-import java.util.concurrent.atomic.AtomicBoolean;
+import static junit.framework.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.when;
+import static org.powermock.api.mockito.PowerMockito.mock;
 
 import android.os.SystemClock;
-
+import com.facebook.common.memory.PooledByteBuffer;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
 import com.facebook.imagepipeline.testing.FakeClock;
 import com.facebook.imagepipeline.testing.TestExecutorService;
 import com.facebook.imagepipeline.testing.TestScheduledExecutorService;
-
+import java.util.ArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -37,11 +40,6 @@ import org.powermock.core.classloader.annotations.PrepareForTest;
 import org.powermock.modules.junit4.rule.PowerMockRule;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
-
-import static junit.framework.Assert.assertTrue;
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.when;
-import static org.powermock.api.mockito.PowerMockito.mock;
 
 @RunWith(RobolectricTestRunner.class)
 @PowerMockIgnore({ "org.mockito.*", "org.robolectric.*", "android.*" })
@@ -58,11 +56,11 @@ public class JobSchedulerTest {
 
     private static class Job {
       public final EncodedImage encodedImage;
-      public final boolean isLast;
+      public final @Consumer.Status int status;
 
-      public Job(EncodedImage encodedImage, boolean isLast) {
+      public Job(EncodedImage encodedImage, @Consumer.Status int status) {
         this.encodedImage = EncodedImage.cloneOrNull(encodedImage);
-        this.isLast = isLast;
+        this.status = status;
       }
     }
 
@@ -72,14 +70,14 @@ public class JobSchedulerTest {
     public final ArrayList<Job> jobs = new ArrayList<>();
 
     @Override
-    public void run(EncodedImage encodedImage, boolean isLast) {
+    public void run(EncodedImage encodedImage, @Consumer.Status int status) {
       running.set(true);
       try {
         waitForCondition(wait, false);
         if (fail.get()) {
           throw new RuntimeException();
         } else {
-          jobs.add(new Job(encodedImage, isLast));
+          jobs.add(new Job(encodedImage, status));
         }
       } finally {
         running.set(false);
@@ -131,10 +129,10 @@ public class JobSchedulerTest {
   @Test
   public void testUpdate_Intermediate() {
     EncodedImage encodedImage = fakeEncodedImage();
-    assertTrue(mJobScheduler.updateJob(encodedImage, false));
+    assertTrue(mJobScheduler.updateJob(encodedImage, Consumer.NO_FLAGS));
     assertNotSame(encodedImage, mJobScheduler.mEncodedImage);
     assertReferencesEqual(encodedImage, mJobScheduler.mEncodedImage);
-    assertEquals(false, mJobScheduler.mIsLast);
+    assertEquals(Consumer.NO_FLAGS, mJobScheduler.mStatus);
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(0, mTestJobRunnable.jobs.size());
@@ -142,10 +140,10 @@ public class JobSchedulerTest {
 
   @Test
   public void testUpdate_Intermediate_Invalid() {
-    assertTrue(mJobScheduler.updateJob(fakeEncodedImage(), false));
-    assertFalse(mJobScheduler.updateJob(null, false));
+    assertTrue(mJobScheduler.updateJob(fakeEncodedImage(), Consumer.NO_FLAGS));
+    assertFalse(mJobScheduler.updateJob(null, Consumer.NO_FLAGS));
     assertNotNull(mJobScheduler.mEncodedImage);
-    assertEquals(false, mJobScheduler.mIsLast);
+    assertEquals(Consumer.NO_FLAGS, mJobScheduler.mStatus);
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(0, mTestJobRunnable.jobs.size());
@@ -154,10 +152,22 @@ public class JobSchedulerTest {
   @Test
   public void testUpdate_Last() {
     EncodedImage encodedImage = fakeEncodedImage();
-    assertTrue(mJobScheduler.updateJob(encodedImage, true));
+    assertTrue(mJobScheduler.updateJob(encodedImage, Consumer.IS_LAST));
     assertNotSame(encodedImage, mJobScheduler.mEncodedImage);
     assertReferencesEqual(encodedImage, mJobScheduler.mEncodedImage);
-    assertEquals(true, mJobScheduler.mIsLast);
+    assertEquals(Consumer.IS_LAST, mJobScheduler.mStatus);
+    assertEquals(0, mTestScheduledExecutorService.getPendingCount());
+    assertEquals(0, mTestExecutorService.getPendingCount());
+    assertEquals(0, mTestJobRunnable.jobs.size());
+  }
+
+  @Test
+  public void testUpdate_Placeholder() {
+    EncodedImage encodedImage = fakeEncodedImage();
+    assertTrue(mJobScheduler.updateJob(encodedImage, Consumer.IS_PLACEHOLDER));
+    assertNotSame(encodedImage, mJobScheduler.mEncodedImage);
+    assertReferencesEqual(encodedImage, mJobScheduler.mEncodedImage);
+    assertEquals(Consumer.IS_PLACEHOLDER, mJobScheduler.mStatus);
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(0, mTestJobRunnable.jobs.size());
@@ -165,10 +175,10 @@ public class JobSchedulerTest {
 
   @Test
   public void testUpdate_Last_Null() {
-    assertTrue(mJobScheduler.updateJob(fakeEncodedImage(), false));
-    assertTrue(mJobScheduler.updateJob(null, true));
+    assertTrue(mJobScheduler.updateJob(fakeEncodedImage(), Consumer.NO_FLAGS));
+    assertTrue(mJobScheduler.updateJob(null, Consumer.IS_LAST));
     assertEquals(null, mJobScheduler.mEncodedImage);
-    assertEquals(true, mJobScheduler.mIsLast);
+    assertEquals(Consumer.IS_LAST, mJobScheduler.mStatus);
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(0, mTestJobRunnable.jobs.size());
@@ -177,7 +187,7 @@ public class JobSchedulerTest {
   @Test
   public void testClear() throws Exception {
     EncodedImage encodedImage = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage, true);
+    mJobScheduler.updateJob(encodedImage, Consumer.IS_LAST);
     mJobScheduler.clearJob();
     assertEquals(null, mJobScheduler.mEncodedImage);
     encodedImage.close();
@@ -187,7 +197,7 @@ public class JobSchedulerTest {
   @Test
   public void testSchedule_Intermediate() {
     EncodedImage encodedImage = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage, false);
+    mJobScheduler.updateJob(encodedImage, Consumer.NO_FLAGS);
 
     assertTrue(mJobScheduler.scheduleJob());
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
@@ -198,12 +208,12 @@ public class JobSchedulerTest {
     mFakeClockForWorker.incrementBy(1234);
     mFakeClockForScheduled.incrementBy(1234);
     assertEquals(1, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage, false);
+    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage, Consumer.NO_FLAGS);
   }
 
   @Test
   public void testSchedule_Intermediate_Invalid() {
-    mJobScheduler.updateJob(null, false);
+    mJobScheduler.updateJob(null, Consumer.NO_FLAGS);
     assertFalse(mJobScheduler.scheduleJob());
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
@@ -212,7 +222,7 @@ public class JobSchedulerTest {
 
   @Test
   public void testSchedule_Last_Null() {
-    mJobScheduler.updateJob(null, true);
+    mJobScheduler.updateJob(null, Consumer.IS_LAST);
     assertTrue(mJobScheduler.scheduleJob());
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(1, mTestExecutorService.getPendingCount());
@@ -222,13 +232,13 @@ public class JobSchedulerTest {
     mFakeClockForWorker.incrementBy(1234);
     mFakeClockForScheduled.incrementBy(1234);
     assertEquals(1, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(0), null, true);
+    assertJobsEqual(mTestJobRunnable.jobs.get(0), null, Consumer.IS_LAST);
   }
 
   @Test
   public void testSchedule_Last_Idle() throws Exception {
     EncodedImage encodedImage = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage, true);
+    mJobScheduler.updateJob(encodedImage, Consumer.IS_LAST);
 
     assertEquals(JobScheduler.JobState.IDLE, mJobScheduler.mJobState);
     assertTrue(mJobScheduler.scheduleJob());
@@ -240,7 +250,7 @@ public class JobSchedulerTest {
     mFakeClockForWorker.incrementBy(1234);
     mFakeClockForScheduled.incrementBy(1234);
     assertEquals(1, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage, true);
+    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage, Consumer.IS_LAST);
 
     mTestJobRunnable.jobs.get(0).encodedImage.close();
     encodedImage.close();
@@ -249,11 +259,11 @@ public class JobSchedulerTest {
 
   @Test
   public void testSchedule_Last_Queued() {
-    mJobScheduler.updateJob(fakeEncodedImage(), true);
+    mJobScheduler.updateJob(fakeEncodedImage(), Consumer.IS_LAST);
     assertTrue(mJobScheduler.scheduleJob());
 
     EncodedImage encodedImage2 = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage2, true);
+    mJobScheduler.updateJob(encodedImage2, Consumer.IS_LAST);
     assertEquals(JobScheduler.JobState.QUEUED, mJobScheduler.mJobState);
     assertTrue(mJobScheduler.scheduleJob());
 
@@ -265,13 +275,13 @@ public class JobSchedulerTest {
     mFakeClockForWorker.incrementBy(1234);
     mFakeClockForScheduled.incrementBy(1234);
     assertEquals(1, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage2, true);
+    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage2, Consumer.IS_LAST);
   }
 
   @Test
   public void testSchedule_Last_Running_And_Pending() {
     EncodedImage encodedImage1 = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage1, true);
+    mJobScheduler.updateJob(encodedImage1, Consumer.IS_LAST);
     assertTrue(mJobScheduler.scheduleJob());
 
     final EncodedImage encodedImage2 = fakeEncodedImage();
@@ -287,12 +297,12 @@ public class JobSchedulerTest {
             assertEquals(0, mTestExecutorService.getPendingCount());
             assertEquals(0, mTestJobRunnable.jobs.size());
 
-            mJobScheduler.updateJob(encodedImage2, true);
+            mJobScheduler.updateJob(encodedImage2, Consumer.IS_LAST);
             assertEquals(JobScheduler.JobState.RUNNING, mJobScheduler.mJobState);
             assertTrue(mJobScheduler.scheduleJob());
             assertEquals(JobScheduler.JobState.RUNNING_AND_PENDING, mJobScheduler.mJobState);
 
-            mJobScheduler.updateJob(encodedImage3, true);
+            mJobScheduler.updateJob(encodedImage3, Consumer.IS_LAST);
             assertEquals(JobScheduler.JobState.RUNNING_AND_PENDING, mJobScheduler.mJobState);
             assertTrue(mJobScheduler.scheduleJob());
 
@@ -311,7 +321,7 @@ public class JobSchedulerTest {
     assertEquals(1, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(1, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage1, true);
+    assertJobsEqual(mTestJobRunnable.jobs.get(0), encodedImage1, Consumer.IS_LAST);
 
     mFakeClockForTime.incrementBy(INTERVAL);
     mFakeClockForScheduled.incrementBy(INTERVAL);
@@ -320,20 +330,20 @@ public class JobSchedulerTest {
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(2, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(1), encodedImage3, true);
+    assertJobsEqual(mTestJobRunnable.jobs.get(1), encodedImage3, Consumer.IS_LAST);
   }
 
   @Test
   public void testSchedule_TooSoon() {
     EncodedImage encodedImage1 = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage1, false);
+    mJobScheduler.updateJob(encodedImage1, Consumer.NO_FLAGS);
     mJobScheduler.scheduleJob();
     mFakeClockForTime.incrementBy(1234);
     mFakeClockForWorker.incrementBy(1234);
     mFakeClockForScheduled.incrementBy(1234);
 
     EncodedImage encodedImage2 = fakeEncodedImage();
-    mJobScheduler.updateJob(encodedImage2, true);
+    mJobScheduler.updateJob(encodedImage2, Consumer.IS_LAST);
     mFakeClockForTime.incrementBy(INTERVAL - 5);
     mFakeClockForWorker.incrementBy(INTERVAL - 5);
     mFakeClockForScheduled.incrementBy(INTERVAL - 5);
@@ -359,12 +369,12 @@ public class JobSchedulerTest {
     assertEquals(0, mTestScheduledExecutorService.getPendingCount());
     assertEquals(0, mTestExecutorService.getPendingCount());
     assertEquals(2, mTestJobRunnable.jobs.size());
-    assertJobsEqual(mTestJobRunnable.jobs.get(1), encodedImage2, true);
+    assertJobsEqual(mTestJobRunnable.jobs.get(1), encodedImage2, Consumer.IS_LAST);
   }
 
   @Test
   public void testFailure() {
-    mJobScheduler.updateJob(fakeEncodedImage(), false);
+    mJobScheduler.updateJob(fakeEncodedImage(), Consumer.NO_FLAGS);
     mJobScheduler.scheduleJob();
     mTestJobRunnable.fail.set(true);
     try {
@@ -383,9 +393,9 @@ public class JobSchedulerTest {
   private static void assertJobsEqual(
       TestJobRunnable.Job job,
       EncodedImage encodedImage,
-      boolean isLast) {
+      @Consumer.Status int status) {
     assertReferencesEqual(encodedImage, job.encodedImage);
-    assertEquals(isLast, job.isLast);
+    assertEquals(status, job.status);
   }
 
   private static void assertReferencesEqual(EncodedImage expected, EncodedImage actual) {

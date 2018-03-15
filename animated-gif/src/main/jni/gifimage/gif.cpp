@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #define LOG_TAG "GifImage"
@@ -70,8 +68,9 @@ public:
       std::unique_ptr<GifFileType, decltype(&DGifCloseFile2)>&& pGifFile,
       std::shared_ptr<DataWrapper>& pData) :
           m_spGifFile(std::move(pGifFile)),
-          m_spData(pData) {
-    m_rasterBits.reserve(m_spGifFile->SWidth * m_spGifFile->SHeight);
+          m_spData(pData),
+          m_reservedBufferSize(m_spGifFile->SWidth * m_spGifFile->SHeight) {
+    m_rasterBits.reserve(m_reservedBufferSize);
   }
 
   virtual ~GifWrapper() {
@@ -110,6 +109,13 @@ public:
     return m_rasterBits.size();
   }
 
+  void reserveRasterBuffer(size_t bufferSize) {
+    if (m_reservedBufferSize < bufferSize) {
+      m_rasterBits.reserve(bufferSize);
+      m_reservedBufferSize = bufferSize;
+    }
+  }
+
   std::mutex& getRasterMutex() {
     return m_rasterMutex;
   }
@@ -125,6 +131,7 @@ private:
   std::vector<int> m_vectorFrameByteOffsets;
   std::vector<uint8_t> m_rasterBits;
   std::mutex m_rasterMutex;
+  size_t m_reservedBufferSize;
 };
 
 /**
@@ -278,14 +285,15 @@ static ColorMapObject* genDefColorMap(void) {
 ////////////////////////////////////////////////////////////////
 
 bool getGraphicsControlBlockForImage(SavedImage* pSavedImage, GraphicsControlBlock* pGcp) {
+  int resultCode = GIF_ERROR;
+  // If a GIF has multiple graphic control extension blocks, we use the last one
   for (int i = 0; i < pSavedImage->ExtensionBlockCount; i++) {
     ExtensionBlock* pExtensionBlock = &pSavedImage->ExtensionBlocks[i];
     if (pExtensionBlock->Function == GRAPHICS_EXT_FUNC_CODE) {
-      DGifExtensionToGCB(pExtensionBlock->ByteCount, pExtensionBlock->Bytes, pGcp);
-      return true;
+      resultCode = DGifExtensionToGCB(pExtensionBlock->ByteCount, pExtensionBlock->Bytes, pGcp);
     }
   }
-  return false;
+  return resultCode == GIF_OK;
 }
 
 /**
@@ -296,36 +304,44 @@ bool getGraphicsControlBlockForImage(SavedImage* pSavedImage, GraphicsControlBlo
  * written to the SavedImage structure. This is the key to how we avoid caching all the decoded
  * frame pixels in memory.
  *
- * @param pGifFile the gif data structure to read to and write to
- * @param pRasterBits the buffer to write the decoded frame pixels to. If null, the data is
- *    not actually decoded and instead just skipped.
- * @param doNotAddToSavedImages if set to true, will not add an additional SavedImage to
+ * @param pGifWrapper the gif wrapper containing the giflib struct and additional data
+ * @param decodeFrame if set to true, next frame will be decoded to pGifWrapper bits buffer,
+       otherwise it will only decode frame data and skip it
+ * @param addToSavedImages if set to true, will add an additional SavedImage to
  *     pGifFile->SavedImages
  * @return a gif error code
  */
 int readSingleFrame(
-    GifFileType* pGifFile,
-    uint8_t* pRasterBits,
-    bool doNotAddToSavedImages) {
+    GifWrapper* pGifWrapper,
+    bool decodeFramePixels,
+    bool addToSavedImages) {
+
+  GifFileType *pGifFile = pGifWrapper->get();
+
   if (DGifGetImageDesc(pGifFile) == GIF_ERROR) {
     return GIF_ERROR;
   }
   SavedImage* pSavedImage = &pGifFile->SavedImages[pGifFile->ImageCount - 1];
 
-  // Check size of image.
-  if (pSavedImage->ImageDesc.Width <= 0 &&
-      pSavedImage->ImageDesc.Height <= 0 &&
+  // Check size of image. Note: Frames with 0 width or height should be allowed.
+  if (pSavedImage->ImageDesc.Width < 0 || pSavedImage->ImageDesc.Height < 0) {
+    return GIF_ERROR;
+  }
+
+  // Check for image size overflow.
+  if (pSavedImage->ImageDesc.Width > 0 &&
+      pSavedImage->ImageDesc.Height > 0 &&
       pSavedImage->ImageDesc.Width > (INT_MAX / pSavedImage->ImageDesc.Height)) {
     return GIF_ERROR;
   }
 
-  size_t imageSize = pSavedImage->ImageDesc.Width * pSavedImage->ImageDesc.Height;
-  if (imageSize > (unsigned)(pGifFile->SWidth * pGifFile->SHeight)) {
-    return GIF_ERROR;
-  }
+  if (decodeFramePixels) {
+    // Reserve larger raster bits buffer if needed
+    size_t imageSize = pSavedImage->ImageDesc.Width * pSavedImage->ImageDesc.Height;
+    pGifWrapper->reserveRasterBuffer(imageSize);
 
-  if (pRasterBits != nullptr) {
-    // We're were asked to decode and write the results to pRasterBits.
+    // Decode frame image and save it to temporary raster bits buffer
+    uint8_t* pRasterBits = pGifWrapper->getRasterBits();
     if (pSavedImage->ImageDesc.Interlace) {
       // The way an interlaced image should be read - offsets and jumps...
       int interlacedOffset[] = { 0, 4, 2, 1 };
@@ -369,7 +385,7 @@ int readSingleFrame(
     pGifFile->ExtensionBlockCount = 0;
   }
 
-  if (doNotAddToSavedImages) {
+  if (!addToSavedImages) {
     // giflib wasn't designed to work with decoding arbitrary frames on the fly. By default, it will
     // keep adding more images to the SavedImages array. To avoid that, we just decrement the image
     // count. It basically means the array remains larger by one GifFileType. We decrement it so
@@ -496,9 +512,10 @@ int modifiedDGifSlurp(GifWrapper* pGifWrapper) {
         pGifWrapper->addFrameByteOffset(pGifWrapper->getData()->getPosition());
 
         if (readSingleFrame(
-              pGifWrapper->get(),
-              nullptr,
-              false) == GIF_ERROR) {
+              pGifWrapper,
+              false, // Don't decode frame pixels
+              true  // Add to saved images
+              ) == GIF_ERROR) {
           isStop = true;
         }
         break;
@@ -1075,7 +1092,7 @@ void GifFrame_nativeRenderFrame(
     throwIllegalArgumentException(pEnv, "Width or height is negative");
     return;
   }
-  
+
   if (bitmapInfo.width < (unsigned) width || bitmapInfo.height < (unsigned) height) {
     throwIllegalStateException(pEnv, "Width or height is too small");
     return;
@@ -1103,7 +1120,14 @@ void GifFrame_nativeRenderFrame(
   pGifWrapper->getData()->setPosition(byteOffset);
 
   // Now we kick off the decoding process.
-  readSingleFrame(pGifWrapper->get(), pGifWrapper->getRasterBits(), true);
+  int readRes = readSingleFrame(pGifWrapper,
+                                true, // Decode frame pixels
+                                false // Don't add frame to saved images
+                                );
+  if (readRes != GIF_OK) {
+    // Probably, broken canvas, and we can ignore it
+    return;
+  }
 
   // Get the right color table to use.
   ColorMapObject* pColorMap = spNativeContext->spGifWrapper->get()->SColorMap;
@@ -1145,6 +1169,53 @@ jint GifFrame_nativeGetDurationMs(JNIEnv* pEnv, jobject thiz) {
     return -1;
   }
   return spNativeContext->durationMs;
+}
+
+/**
+ * Gets the color (as an int, as in Android) of the transparent pixel of this frame
+ *
+ * @return the color (as an int, as in Android) of the transparent pixel of this frame
+ */
+jint GifFrame_nativeGetTransparentPixelColor(JNIEnv* pEnv, jobject thiz) {
+  auto spNativeContext = getGifFrameNativeContext(pEnv, thiz);
+  auto pGifWrapper = spNativeContext->spGifWrapper;
+
+  //
+  // Get the right color table to use, then get index of transparent pixel into that table
+  //
+  int frameNum = spNativeContext->frameNum;
+  ColorMapObject* pColorMap = pGifWrapper->get()->SColorMap;
+  SavedImage* pSavedImage = &pGifWrapper->get()->SavedImages[frameNum];
+
+  if (pSavedImage->ImageDesc.ColorMap != NULL) {
+    // use local color table
+    pColorMap = pSavedImage->ImageDesc.ColorMap;
+    if (pColorMap->ColorCount != (1 << pColorMap->BitsPerPixel)) {
+      pColorMap = sDefaultColorMap;
+    }
+  }
+
+  int colorIndex = spNativeContext->transparentIndex;
+
+  if (pColorMap != NULL  &&  colorIndex >= 0) {
+    PixelType32 color = getColorFromTable(colorIndex, pColorMap);
+
+    //
+    // convert PixelType32 to Android-style int color value.
+    // the c++ compiler will optimize these four lines of bit-shifting -- there is no need to
+    // collapse them into a single confusing expression
+    //
+    int alphaShifted  = color.alpha   << 24;
+    int redShifted    = color.red     << 16;
+    int greenShifted  = color.green   <<  8;
+    int blueShifted   = color.blue    <<  0;
+
+    int iColor = alphaShifted | redShifted | greenShifted | blueShifted;
+
+    return iColor;
+  } else {
+    return 0; // in android, 0 == Color.TRANSPARENT
+  }
 }
 
 jboolean GifFrame_nativeHasTransparency(JNIEnv* pEnv, jobject thiz) {
@@ -1312,6 +1383,9 @@ static JNINativeMethod sGifFrameMethods[] = {
   { "nativeGetDurationMs",
     "()I",
     (void*)GifFrame_nativeGetDurationMs },
+  { "nativeGetTransparentPixelColor",
+    "()I",
+    (void*)GifFrame_nativeGetTransparentPixelColor },
   { "nativeHasTransparency",
     "()Z",
     (void*)GifFrame_nativeHasTransparency },

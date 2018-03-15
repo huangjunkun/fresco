@@ -12,18 +12,16 @@
 
 package com.facebook.samples.zoomable;
 
-import javax.annotation.Nullable;
-
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Matrix;
 import android.graphics.RectF;
 import android.graphics.drawable.Animatable;
+import android.support.v4.view.ScrollingView;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.logging.FLog;
 import com.facebook.drawee.controller.AbstractDraweeController;
@@ -35,13 +33,15 @@ import com.facebook.drawee.generic.GenericDraweeHierarchyBuilder;
 import com.facebook.drawee.generic.GenericDraweeHierarchyInflater;
 import com.facebook.drawee.interfaces.DraweeController;
 import com.facebook.drawee.view.DraweeView;
+import javax.annotation.Nullable;
 
 /**
  * DraweeView that has zoomable capabilities.
  * <p>
  * Once the image loads, pinch-to-zoom and translation gestures are enabled.
  */
-public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
+public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy>
+    implements ScrollingView {
 
   private static final Class<?> TAG = ZoomableDraweeView.class;
 
@@ -53,6 +53,7 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
   private DraweeController mHugeImageController;
   private ZoomableController mZoomableController;
   private GestureDetector mTapGestureDetector;
+  private boolean mAllowTouchInterceptionWhileZoomed = true;
 
   private final ControllerListener mControllerListener = new BaseControllerListener<Object>() {
     @Override
@@ -69,12 +70,19 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
     }
   };
 
-  private final ZoomableController.Listener mZoomableListener = new ZoomableController.Listener() {
-    @Override
-    public void onTransformChanged(Matrix transform) {
-      ZoomableDraweeView.this.onTransformChanged(transform);
-    }
-  };
+  private final ZoomableController.Listener mZoomableListener =
+      new ZoomableController.Listener() {
+        @Override
+        public void onTransformBegin(Matrix transform) {}
+
+        @Override
+        public void onTransformChanged(Matrix transform) {
+          ZoomableDraweeView.this.onTransformChanged(transform);
+        }
+
+        @Override
+        public void onTransformEnd(Matrix transform) {}
+      };
 
   private final GestureListenerWrapper mTapListenerWrapper = new GestureListenerWrapper();
 
@@ -168,6 +176,27 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
   }
 
   /**
+   * Check whether the parent view can intercept touch events while zoomed.
+   * This can be used, for example, to swipe between images in a view pager while zoomed.
+   *
+   * @return true if touch events can be intercepted
+   */
+  public boolean allowsTouchInterceptionWhileZoomed() {
+    return mAllowTouchInterceptionWhileZoomed;
+  }
+
+  /**
+   * If this is set to true, parent views can intercept touch events while the view is zoomed.
+   * For example, this can be used to swipe between images in a view pager while zoomed.
+   *
+   * @param allowTouchInterceptionWhileZoomed true if the parent needs to intercept touches
+   */
+  public void setAllowTouchInterceptionWhileZoomed(
+      boolean allowTouchInterceptionWhileZoomed) {
+    mAllowTouchInterceptionWhileZoomed = allowTouchInterceptionWhileZoomed;
+  }
+
+  /**
    * Sets the tap listener.
    */
   public void setTapListener(GestureDetector.SimpleOnGestureListener tapListener) {
@@ -243,7 +272,20 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
   protected void onDraw(Canvas canvas) {
     int saveCount = canvas.save();
     canvas.concat(mZoomableController.getTransform());
-    super.onDraw(canvas);
+    try {
+      super.onDraw(canvas);
+    } catch (Exception e) {
+      DraweeController controller = getController();
+      if (controller != null && controller instanceof AbstractDraweeController) {
+        Object callerContext = ((AbstractDraweeController) controller).getCallerContext();
+        if (callerContext != null) {
+          throw new RuntimeException(
+              String.format("Exception in onDraw, callerContext=%s", callerContext.toString()),
+              e);
+        }
+      }
+      throw e;
+    }
     canvas.restoreToCount(saveCount);
   }
 
@@ -259,15 +301,16 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
           this.hashCode());
       return true;
     }
+
     if (mZoomableController.onTouchEvent(event)) {
-      if (!mZoomableController.isIdentity()) {
-        getParent().requestDisallowInterceptTouchEvent(true);
-      }
       FLog.v(
           getLogTag(),
           "onTouchEvent: %d, view %x, handled by zoomable controller",
           a,
           this.hashCode());
+      if (!mAllowTouchInterceptionWhileZoomed && !mZoomableController.isIdentity()) {
+        getParent().requestDisallowInterceptTouchEvent(true);
+      }
       return true;
     }
     if (super.onTouchEvent(event)) {
@@ -276,7 +319,7 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
     }
     // None of our components reported that they handled the touch event. Upon returning false
     // from this method, our parent won't send us any more events for this gesture. Unfortunately,
-    // some componentes may have started a delayed action, such as a long-press timer, and since we
+    // some components may have started a delayed action, such as a long-press timer, and since we
     // won't receive an ACTION_UP that would cancel that timer, a false event may be triggered.
     // To prevent that we explicitly send one last cancel event when returning false.
     MotionEvent cancelEvent = MotionEvent.obtain(event);
@@ -285,6 +328,31 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
     mZoomableController.onTouchEvent(cancelEvent);
     cancelEvent.recycle();
     return false;
+  }
+
+  @Override
+  public int computeHorizontalScrollRange() {
+    return mZoomableController.computeHorizontalScrollRange();
+  }
+  @Override
+  public int computeHorizontalScrollOffset() {
+    return mZoomableController.computeHorizontalScrollOffset();
+  }
+  @Override
+  public int computeHorizontalScrollExtent() {
+    return mZoomableController.computeHorizontalScrollExtent();
+  }
+  @Override
+  public int computeVerticalScrollRange() {
+    return mZoomableController.computeVerticalScrollRange();
+  }
+  @Override
+  public int computeVerticalScrollOffset() {
+    return mZoomableController.computeVerticalScrollOffset();
+  }
+  @Override
+  public int computeVerticalScrollExtent() {
+    return mZoomableController.computeVerticalScrollExtent();
   }
 
   @Override
@@ -297,8 +365,8 @@ public class ZoomableDraweeView extends DraweeView<GenericDraweeHierarchy> {
   private void onFinalImageSet() {
     FLog.v(getLogTag(), "onFinalImageSet: view %x", this.hashCode());
     if (!mZoomableController.isEnabled()) {
-      updateZoomableControllerBounds();
       mZoomableController.setEnabled(true);
+      updateZoomableControllerBounds();
     }
   }
 

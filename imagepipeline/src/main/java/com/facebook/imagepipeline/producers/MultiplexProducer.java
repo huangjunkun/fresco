@@ -1,18 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
-import javax.annotation.concurrent.ThreadSafe;
-
+import android.util.Pair;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.internal.Sets;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.imagepipeline.common.Priority;
 import java.io.Closeable;
 import java.io.IOException;
 import java.util.HashMap;
@@ -20,13 +19,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArraySet;
-
-import android.util.Pair;
-
-import com.facebook.common.internal.Preconditions;
-import com.facebook.common.internal.Sets;
-import com.facebook.common.internal.VisibleForTesting;
-import com.facebook.imagepipeline.common.Priority;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Producer for combining multiple identical requests into a single request.
@@ -147,6 +142,8 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
     private T mLastIntermediateResult;
     @GuardedBy("Multiplexer.this")
     private float mLastProgress;
+    @GuardedBy("Multiplexer.this")
+    private @Consumer.Status int mLastStatus;
 
     /**
      * Producer context used for cancelling producers below MultiplexProducers, and for setting
@@ -196,6 +193,7 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
       final List<ProducerContextCallbacks> priorityCallbacks;
       final List<ProducerContextCallbacks> intermediateResultsCallbacks;
       final float lastProgress;
+      final int lastStatus;
 
       // Check if Multiplexer is still in mMultiplexers map, and if so add new consumer.
       // Also store current intermediate result - we will notify consumer after acquiring
@@ -210,6 +208,7 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
         intermediateResultsCallbacks = updateIsIntermediateResultExpected();
         lastIntermediateResult = mLastIntermediateResult;
         lastProgress = mLastProgress;
+        lastStatus = mLastStatus;
       }
 
       BaseProducerContext.callOnIsPrefetchChanged(prefetchCallbacks);
@@ -230,7 +229,7 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
           if (lastProgress > 0) {
             consumer.onProgressUpdate(lastProgress);
           }
-          consumer.onNewResult(lastIntermediateResult, false);
+          consumer.onNewResult(lastIntermediateResult, lastStatus);
           closeSafely(lastIntermediateResult);
         }
       }
@@ -416,7 +415,7 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
     public void onNextResult(
         final ForwardingConsumer consumer,
         final T closeableObject,
-        final boolean isFinal) {
+        @Consumer.Status final int status) {
       Iterator<Pair<Consumer<T>, ProducerContext>> iterator;
       synchronized (Multiplexer.this) {
         // check for late callbacks
@@ -428,8 +427,9 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
         mLastIntermediateResult = null;
 
         iterator = mConsumerContextPairs.iterator();
-        if (!isFinal) {
+        if (BaseConsumer.isNotLast(status)) {
           mLastIntermediateResult = cloneOrNull(closeableObject);
+          mLastStatus = status;
         } else {
           mConsumerContextPairs.clear();
           removeMultiplexer(mKey, this);
@@ -439,7 +439,7 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
       while (iterator.hasNext()) {
         Pair<Consumer<T>, ProducerContext> pair = iterator.next();
         synchronized (pair) {
-          pair.first.onNewResult(closeableObject, isFinal);
+          pair.first.onNewResult(closeableObject, status);
         }
       }
     }
@@ -495,8 +495,8 @@ public abstract class MultiplexProducer<K, T extends Closeable> implements Produ
      */
     private class ForwardingConsumer extends BaseConsumer<T> {
       @Override
-      protected void onNewResultImpl(T newResult, boolean isLast) {
-        Multiplexer.this.onNextResult(this, newResult, isLast);
+      protected void onNewResultImpl(T newResult, @Status int status) {
+        Multiplexer.this.onNextResult(this, newResult, status);
       }
 
       @Override

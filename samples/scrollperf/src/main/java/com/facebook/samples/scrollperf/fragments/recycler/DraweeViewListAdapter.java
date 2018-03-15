@@ -17,16 +17,16 @@ import android.net.Uri;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
-
 import com.facebook.drawee.backends.pipeline.Fresco;
 import com.facebook.drawee.backends.pipeline.PipelineDraweeControllerBuilder;
 import com.facebook.drawee.generic.GenericDraweeHierarchy;
-import com.facebook.drawee.view.SimpleDraweeView;
 import com.facebook.imagepipeline.common.ResizeOptions;
 import com.facebook.imagepipeline.request.ImageRequestBuilder;
+import com.facebook.samples.scrollperf.R;
 import com.facebook.samples.scrollperf.conf.Config;
-import com.facebook.samples.scrollperf.conf.Const;
 import com.facebook.samples.scrollperf.data.SimpleAdapter;
+import com.facebook.samples.scrollperf.instrumentation.InstrumentedDraweeView;
+import com.facebook.samples.scrollperf.instrumentation.PerfListener;
 import com.facebook.samples.scrollperf.util.DraweeUtil;
 import com.facebook.samples.scrollperf.util.PipelineUtil;
 import com.facebook.samples.scrollperf.util.SizeUtil;
@@ -40,9 +40,19 @@ public class DraweeViewListAdapter extends BaseAdapter {
 
   private final Config mConfig;
 
-  public DraweeViewListAdapter(SimpleAdapter<Uri> simpleAdapter, Config config) {
+  private final int mPaddingPx;
+
+  private final PerfListener mPerfListener;
+
+  public DraweeViewListAdapter(
+      Context context,
+      SimpleAdapter<Uri> simpleAdapter,
+      Config config,
+      PerfListener perfListener) {
     this.mSimpleAdapter = simpleAdapter;
     this.mConfig = config;
+    this.mPaddingPx = context.getResources().getDimensionPixelSize(R.dimen.drawee_padding);
+    this.mPerfListener = perfListener;
   }
 
   @Override
@@ -62,21 +72,20 @@ public class DraweeViewListAdapter extends BaseAdapter {
 
   @Override
   public View getView(int position, View convertView, ViewGroup parent) {
-    SimpleDraweeView draweeView;
+    InstrumentedDraweeView draweeView;
     if (convertView == null) {
       final Context context = parent.getContext();
       GenericDraweeHierarchy gdh = DraweeUtil.createDraweeHierarchy(context, mConfig);
-      draweeView = new SimpleDraweeView(context, gdh);
-      int size = SizeUtil.calcDesiredSize(
-              parent.getContext(),
-              parent.getWidth(),
-              parent.getHeight());
-      SizeUtil.updateViewLayoutParams(draweeView, size, (int) (size / Const.RATIO));
+      draweeView = new InstrumentedDraweeView(context, gdh, mConfig);
+      SizeUtil.setConfiguredSize(parent, draweeView, mConfig);
+      draweeView.setPadding(mPaddingPx, mPaddingPx, mPaddingPx, mPaddingPx);
     } else {
-      draweeView = (SimpleDraweeView) convertView;
+      draweeView = (InstrumentedDraweeView) convertView;
     }
+    final Uri uri = getItem(position);
+    draweeView.initInstrumentation(uri.toString(), mPerfListener);
     ImageRequestBuilder imageRequestBuilder = ImageRequestBuilder
-            .newBuilderWithSource(getItem(position))
+            .newBuilderWithSource(uri)
             .setResizeOptions(
                     new ResizeOptions(
                             draweeView.getLayoutParams().width,
@@ -87,6 +96,9 @@ public class DraweeViewListAdapter extends BaseAdapter {
             .setImageRequest(imageRequestBuilder.build());
     if (mConfig.reuseOldController) {
       builder.setOldController(draweeView.getController());
+    }
+    if (mConfig.instrumentationEnabled) {
+      draweeView.setListener(builder);
     }
     draweeView.setController(builder.build());
     return draweeView;

@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 #include <stdio.h>
@@ -109,7 +107,7 @@ static void isSkipInputData(j_decompress_ptr dinfo, long num_bytes) {
  * Terminate source --- called by jpeg_finish_decompress
  * after all data has been read.  Often a no-op.
  */
-static void isTermSource(j_decompress_ptr dinfo) {
+static void isTermSource(j_decompress_ptr /* dinfo */) {
   /* no work necessary here */
 }
 

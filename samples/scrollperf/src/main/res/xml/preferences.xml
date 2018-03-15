@@ -34,7 +34,7 @@
         <CheckBoxPreference
             android:key="rounded_as_circle"
             android:title="@string/title_preferences_rounded_as_circle_enabled"
-            app:dependency="rounded_corners"
+            android:dependency="rounded_corners"
             />
     </PreferenceCategory>
     <PreferenceCategory
@@ -65,6 +65,39 @@
             />
     </PreferenceCategory>
     <PreferenceCategory
+        android:key="key_preferences_resize_group"
+        android:title="@string/title_preferences_resize_group"
+        >
+        <CheckBoxPreference
+            android:key="downsampling"
+            android:title="@string/title_downsampling"
+            />
+        <ListPreference
+            android:defaultValue="0"
+            android:dialogTitle="@string/title_decoding_thread_count"
+            android:entries="@array/decoding_thread_labels"
+            android:entryValues="@array/decoding_thread_values"
+            android:key="decoding_thread_key"
+            android:title="@string/title_decoding_thread_count"
+            />
+      <CheckBoxPreference
+          android:key="auto_size_override"
+          android:title="@string/title_auto_size_override"
+      />
+      <com.facebook.samples.scrollperf.preferences.SizePreferences
+          android:title="@string/title_overriden_size_width"
+          android:defaultValue="65"
+          android:dependency="auto_size_override"
+          android:key="width_size_key"
+      />
+      <com.facebook.samples.scrollperf.preferences.SizePreferences
+          android:title="@string/title_overriden_size_height"
+          android:defaultValue="@integer/default_size_value"
+          android:dependency="auto_size_override"
+          android:key="height_size_key"
+      />
+    </PreferenceCategory>
+    <PreferenceCategory
         android:key="key_preferences_scale_type_group"
         android:title="@string/title_preferences_drawee_group"
         >
@@ -75,6 +108,18 @@
             android:entryValues="@array/scale_type_values"
             android:key="scale_type"
             android:title="@string/title_preferences_scale_type"
+            />
+        <ListPreference
+            android:defaultValue="0"
+            android:dialogTitle="@string/title_bg_color"
+            android:entries="@array/bg_color_labels"
+            android:entryValues="@array/bg_color_values"
+            android:key="bg_color_key"
+            android:title="@string/title_bg_color"
+        />
+        <CheckBoxPreference
+            android:key="drawee_overlay_key"
+            android:title="@string/title_drawee_overlay"
             />
     </PreferenceCategory>
     <PreferenceCategory
@@ -89,14 +134,55 @@
             android:key="recycler_layout"
             android:title="@string/title_recycler_layout"
             />
+        <ListPreference
+            android:defaultValue="5"
+            android:dialogTitle="@string/dialog_title_grid_recycler_span_count"
+            android:entries="@array/grid_recycler_layout_labels"
+            android:entryValues="@array/grid_recycler_layout_values"
+            android:key="grid_span_count_key"
+            android:title="@string/title_grid_recycler_layout"
+            />
     </PreferenceCategory>
     <PreferenceCategory
         android:key="key_preferences_various_group"
         android:title="@string/title_other_group"
         >
         <CheckBoxPreference
+            android:key="instrumentation_key"
+            android:title="@string/title_instrumentation"
+        />
+        <CheckBoxPreference
+            android:key="webp_support_key"
+            android:title="@string/title_webp_support"
+        />
+        <CheckBoxPreference
+            android:key="decode_cancellation_key"
+            android:title="@string/title_decode_cancellation"
+        />
+        <CheckBoxPreference
             android:key="auto_rotate"
             android:title="@string/title_auto_rotate"
+            />
+        <ListPreference
+            android:defaultValue="@string/value_no_rotation"
+            android:dialogTitle="@string/title_forced_rotation"
+            android:entries="@array/rotation_angle_values"
+            android:entryValues="@array/rotation_angle_values"
+            android:key="rotation_angle"
+            android:title="@string/title_forced_rotation"
+            />
+        <ListPreference
+            android:defaultValue="@string/value_fast_fade_duration"
+            android:dialogTitle="@string/title_fade_duration"
+            android:entries="@array/fade_duration_summaries"
+            android:entryValues="@array/fade_duration_values"
+            android:key="fade_duration"
+            android:title="@string/title_fade_duration"
+            />
+        <CheckBoxPreference
+            android:defaultValue="false"
+            android:key="draw_border"
+            android:title="@string/title_draw_border"
             />
     </PreferenceCategory>
 </PreferenceScreen>

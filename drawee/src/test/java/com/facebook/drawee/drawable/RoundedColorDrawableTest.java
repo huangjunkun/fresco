@@ -1,13 +1,15 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.drawable;
+
+import static org.junit.Assert.*;
+import static org.mockito.Matchers.any;
+import static org.mockito.Mockito.*;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -15,17 +17,11 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.Drawable;
-
-import org.robolectric.RobolectricTestRunner;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
-import static org.mockito.Matchers.any;
+import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public class RoundedColorDrawableTest {
@@ -107,6 +103,13 @@ public class RoundedColorDrawableTest {
     mRoundedColorDrawable.setPadding(padding);
     verify(mCallback).invalidateDrawable(mRoundedColorDrawable);
     assertEquals(padding, mRoundedColorDrawable.getPadding(), 0);
+  }
+
+  @Test
+  public void testSetScaleDownInsideBorders() {
+    mRoundedColorDrawable.setScaleDownInsideBorders(true);
+    verify(mCallback).invalidateDrawable(mRoundedColorDrawable);
+    assertTrue(mRoundedColorDrawable.getScaleDownInsideBorders());
   }
 
   @Test

@@ -1,28 +1,29 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.platform;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Rect;
 import android.os.Build;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.Throwables;
+import com.facebook.common.memory.PooledByteBuffer;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.imagepipeline.common.TooManyBitmapsException;
 import com.facebook.imagepipeline.image.EncodedImage;
 import com.facebook.imagepipeline.memory.BitmapCounter;
 import com.facebook.imagepipeline.memory.BitmapCounterProvider;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
 import com.facebook.imagepipeline.nativecode.Bitmaps;
+import com.facebook.imageutils.BitmapUtil;
 import com.facebook.imageutils.JfifUtil;
+import java.util.Locale;
+import javax.annotation.Nullable;
 
 /**
  * Base class for bitmap decodes for Dalvik VM (Gingerbread to KitKat).
@@ -41,16 +42,16 @@ abstract class DalvikPurgeableDecoder implements PlatformDecoder {
    * Creates a bitmap from encoded bytes.
    *
    * @param encodedImage the encoded image with reference to the encoded bytes
-   * @param bitmapConfig the {@link android.graphics.Bitmap.Config}
-   * used to create the decoded Bitmap
+   * @param bitmapConfig the {@link android.graphics.Bitmap.Config} used to create the decoded
+   *     Bitmap
+   * @param regionToDecode optional image region to decode. currently not supported.
    * @return the bitmap
    * @throws TooManyBitmapsException if the pool is full
    * @throws java.lang.OutOfMemoryError if the Bitmap cannot be allocated
    */
   @Override
   public CloseableReference<Bitmap> decodeFromEncodedImage(
-      final EncodedImage encodedImage,
-      Bitmap.Config bitmapConfig) {
+      final EncodedImage encodedImage, Bitmap.Config bitmapConfig, @Nullable Rect regionToDecode) {
     BitmapFactory.Options options = getBitmapFactoryOptions(
         encodedImage.getSampleSize(),
         bitmapConfig);
@@ -68,9 +69,10 @@ abstract class DalvikPurgeableDecoder implements PlatformDecoder {
    * Creates a bitmap from encoded JPEG bytes. Supports a partial JPEG image.
    *
    * @param encodedImage the encoded image with reference to the encoded bytes
+   * @param bitmapConfig the {@link android.graphics.Bitmap.Config} used to create the decoded
+   *     Bitmap
+   * @param regionToDecode optional image region to decode. currently not supported.
    * @param length the number of encoded bytes in the buffer
-   * @param bitmapConfig the {@link android.graphics.Bitmap.Config}
-   * used to create the decoded Bitmap
    * @return the bitmap
    * @throws TooManyBitmapsException if the pool is full
    * @throws java.lang.OutOfMemoryError if the Bitmap cannot be allocated
@@ -79,6 +81,7 @@ abstract class DalvikPurgeableDecoder implements PlatformDecoder {
   public CloseableReference<Bitmap> decodeJPEGFromEncodedImage(
       final EncodedImage encodedImage,
       Bitmap.Config bitmapConfig,
+      @Nullable Rect regionToDecode,
       int length) {
     BitmapFactory.Options options = getBitmapFactoryOptions(
         encodedImage.getSampleSize(),
@@ -158,8 +161,19 @@ abstract class DalvikPurgeableDecoder implements PlatformDecoder {
       throw Throwables.propagate(e);
     }
     if (!mUnpooledBitmapsCounter.increase(bitmap)) {
+      int bitmapSize = BitmapUtil.getSizeInBytes(bitmap);
       bitmap.recycle();
-      throw new TooManyBitmapsException();
+      String detailMessage = String.format(
+          Locale.US,
+          "Attempted to pin a bitmap of size %d bytes."
+              + " The current pool count is %d, the current pool size is %d bytes."
+              + " The current pool max count is %d, the current pool max size is %d bytes.",
+          bitmapSize,
+          mUnpooledBitmapsCounter.getCount(),
+          mUnpooledBitmapsCounter.getSize(),
+          mUnpooledBitmapsCounter.getMaxCount(),
+          mUnpooledBitmapsCounter.getMaxSize());
+      throw new TooManyBitmapsException(detailMessage);
     }
     return CloseableReference.of(bitmap, mUnpooledBitmapsCounter.getReleaser());
   }

@@ -1,32 +1,33 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.image;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.lang.Override;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import com.facebook.common.internal.ByteStreams;
 import com.facebook.common.internal.Supplier;
+import com.facebook.common.memory.PooledByteBuffer;
 import com.facebook.common.references.CloseableReference;
+import com.facebook.imageformat.DefaultImageFormats;
 import com.facebook.imageformat.ImageFormat;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
+import com.facebook.imagepipeline.common.BytesRange;
 import com.facebook.imagepipeline.testing.TrivialPooledByteBuffer;
 import com.facebook.imageutils.JfifUtil;
-
-import org.junit.*;
-import org.junit.runner.*;
+import java.io.FileInputStream;
+import java.io.IOException;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Tests for {@link EncodedImage}
@@ -70,11 +71,13 @@ public class EncodedImageTest {
   @Test
   public void testCloneOrNull() {
     EncodedImage encodedImage = new EncodedImage(mByteBufferRef);
-    encodedImage.setImageFormat(ImageFormat.JPEG);
+    encodedImage.setImageFormat(DefaultImageFormats.JPEG);
     encodedImage.setRotationAngle(0);
+    encodedImage.setExifOrientation(5);
     encodedImage.setWidth(1);
     encodedImage.setHeight(2);
     encodedImage.setSampleSize(4);
+    encodedImage.setBytesRange(BytesRange.toMax(1000));
     EncodedImage encodedImage2 = EncodedImage.cloneOrNull(encodedImage);
     assertEquals(3, mByteBufferRef.getUnderlyingReferenceTestOnly().getRefCountTestOnly());
     assertSame(
@@ -82,13 +85,16 @@ public class EncodedImageTest {
         encodedImage2.getByteBufferRef().getUnderlyingReferenceTestOnly());
     assertEquals(encodedImage.getImageFormat(), encodedImage2.getImageFormat());
     assertEquals(encodedImage.getRotationAngle(), encodedImage2.getRotationAngle());
+    assertEquals(encodedImage.getExifOrientation(), encodedImage2.getExifOrientation());
     assertEquals(encodedImage.getHeight(), encodedImage2.getHeight());
     assertEquals(encodedImage.getWidth(), encodedImage2.getWidth());
     assertEquals(encodedImage.getSampleSize(), encodedImage2.getSampleSize());
+    assertEquals(encodedImage.getBytesRange(), encodedImage2.getBytesRange());
 
     encodedImage = new EncodedImage(mInputStreamSupplier, 100);
-    encodedImage.setImageFormat(ImageFormat.JPEG);
+    encodedImage.setImageFormat(DefaultImageFormats.JPEG);
     encodedImage.setRotationAngle(0);
+    encodedImage.setExifOrientation(5);
     encodedImage.setWidth(1);
     encodedImage.setHeight(2);
     encodedImage2 = EncodedImage.cloneOrNull(encodedImage);
@@ -129,6 +135,7 @@ public class EncodedImageTest {
     EncodedImage encodedImage1 = new EncodedImage(mByteBufferRef);
     EncodedImage encodedImage2 = new EncodedImage(mByteBufferRef);
     encodedImage2.setRotationAngle(1);
+    encodedImage2.setExifOrientation(1);
     encodedImage2.setWidth(1);
     encodedImage2.setHeight(1);
     assertFalse(EncodedImage.isMetaDataAvailable(encodedImage1));
@@ -149,14 +156,25 @@ public class EncodedImageTest {
   }
 
   @Test
+  public void testGetFirstBytesAsHexString() throws IOException {
+    PooledByteBuffer buf = new TrivialPooledByteBuffer("12345abcd".getBytes());
+    EncodedImage encodedImage = new EncodedImage(CloseableReference.of(buf));
+    assertEquals("313233343561626364", encodedImage.getFirstBytesAsHexString(9));
+    assertEquals("313233343561626364", encodedImage.getFirstBytesAsHexString(10));
+    assertEquals("313233343561", encodedImage.getFirstBytesAsHexString(6));
+  }
+
+  @Test
   public void testParseMetaData_JPEG() throws IOException {
     PooledByteBuffer buf = new TrivialPooledByteBuffer(
         ByteStreams.toByteArray(EncodedImageTest.class.getResourceAsStream("images/image.jpg")));
     EncodedImage encodedImage = new EncodedImage(CloseableReference.of(buf));
     encodedImage.parseMetaData();
-    assertSame(ImageFormat.JPEG, encodedImage.getImageFormat());
+    assertSame(DefaultImageFormats.JPEG, encodedImage.getImageFormat());
     assertEquals(550, encodedImage.getWidth());
     assertEquals(468, encodedImage.getHeight());
+    assertEquals(0, encodedImage.getRotationAngle());
+    assertEquals(0, encodedImage.getExifOrientation());
   }
 
   @Test
@@ -165,9 +183,50 @@ public class EncodedImageTest {
         ByteStreams.toByteArray(EncodedImageTest.class.getResourceAsStream("images/image.png")));
     EncodedImage encodedImage = new EncodedImage(CloseableReference.of(buf));
     encodedImage.parseMetaData();
-    assertSame(ImageFormat.PNG, encodedImage.getImageFormat());
+    assertSame(DefaultImageFormats.PNG, encodedImage.getImageFormat());
     assertEquals(800, encodedImage.getWidth());
     assertEquals(600, encodedImage.getHeight());
+    assertEquals(0, encodedImage.getRotationAngle());
+    assertEquals(0, encodedImage.getExifOrientation());
+  }
+
+  private void checkWebpImage(final String imagePath,
+      final ImageFormat imageFormat,
+      final int expectedWidth,
+      final int expectedHeight) throws IOException {
+    PooledByteBuffer buf = new TrivialPooledByteBuffer(
+        ByteStreams.toByteArray(EncodedImageTest.class.getResourceAsStream(imagePath)));
+    EncodedImage encodedImage = new EncodedImage(CloseableReference.of(buf));
+    encodedImage.parseMetaData();
+    assertSame(imageFormat, encodedImage.getImageFormat());
+    assertEquals(expectedWidth, encodedImage.getWidth());
+    assertEquals(expectedHeight, encodedImage.getHeight());
+    assertEquals(0, encodedImage.getRotationAngle());
+  }
+
+  @Test
+  public void testParseMetaData_SimpleWEBP() throws IOException {
+    checkWebpImage("images/1_webp_plain.webp", DefaultImageFormats.WEBP_SIMPLE, 320, 214);
+  }
+
+  @Test
+  public void testParseMetaData_LosslessWEBP() throws IOException {
+    checkWebpImage("images/1_webp_ll.webp", DefaultImageFormats.WEBP_LOSSLESS, 400, 301);
+  }
+
+  @Test
+  public void testParseMetaData_ExtendedWithAlphaWEBP() throws IOException {
+    checkWebpImage("images/1_webp_ea.webp", DefaultImageFormats.WEBP_EXTENDED_WITH_ALPHA, 400, 301);
+  }
+
+  @Test
+  public void testParseMetaData_ExtendedWEBP() throws IOException {
+    checkWebpImage("images/1_webp_e.webp", DefaultImageFormats.WEBP_EXTENDED, 480, 320);
+  }
+
+  @Test
+  public void testParseMetaData_AnimatedWEBP() throws IOException {
+    checkWebpImage("images/1_webp_anim.webp", DefaultImageFormats.WEBP_ANIMATED, 322, 477);
   }
 
   @Test
@@ -177,7 +236,7 @@ public class EncodedImageTest {
     encodedBytes[ENCODED_BYTES_LENGTH - 1] = 0;
     PooledByteBuffer buf = new TrivialPooledByteBuffer(encodedBytes);
     EncodedImage encodedImage = new EncodedImage(CloseableReference.of(buf));
-    encodedImage.setImageFormat(ImageFormat.JPEG);
+    encodedImage.setImageFormat(DefaultImageFormats.JPEG);
     assertFalse(encodedImage.isCompleteAt(ENCODED_BYTES_LENGTH));
   }
 
@@ -188,15 +247,16 @@ public class EncodedImageTest {
     encodedBytes[ENCODED_BYTES_LENGTH - 1] = (byte) JfifUtil.MARKER_EOI;
     PooledByteBuffer buf = new TrivialPooledByteBuffer(encodedBytes);
     EncodedImage encodedImage = new EncodedImage(CloseableReference.of(buf));
-    encodedImage.setImageFormat(ImageFormat.JPEG);
+    encodedImage.setImageFormat(DefaultImageFormats.JPEG);
     assertTrue(encodedImage.isCompleteAt(ENCODED_BYTES_LENGTH));
   }
 
   @Test
   public void testCopyMetaData() {
     EncodedImage encodedImage = new EncodedImage(mByteBufferRef);
-    encodedImage.setImageFormat(ImageFormat.JPEG);
+    encodedImage.setImageFormat(DefaultImageFormats.JPEG);
     encodedImage.setRotationAngle(0);
+    encodedImage.setExifOrientation(1);
     encodedImage.setWidth(1);
     encodedImage.setHeight(2);
     encodedImage.setSampleSize(3);
@@ -207,10 +267,12 @@ public class EncodedImageTest {
     assertEquals(encodedImage.getHeight(), encodedImage2.getHeight());
     assertEquals(encodedImage.getSampleSize(), encodedImage2.getSampleSize());
     assertEquals(encodedImage.getSize(), encodedImage2.getSize());
+    assertEquals(encodedImage.getExifOrientation(), encodedImage2.getExifOrientation());
 
     EncodedImage encodedImage3 = new EncodedImage(mInputStreamSupplier);
-    encodedImage3.setImageFormat(ImageFormat.JPEG);
+    encodedImage3.setImageFormat(DefaultImageFormats.JPEG);
     encodedImage3.setRotationAngle(0);
+    encodedImage3.setExifOrientation(1);
     encodedImage3.setWidth(1);
     encodedImage3.setHeight(2);
     encodedImage3.setSampleSize(3);
@@ -222,5 +284,6 @@ public class EncodedImageTest {
     assertEquals(encodedImage3.getHeight(), encodedImage4.getHeight());
     assertEquals(encodedImage3.getSampleSize(), encodedImage4.getSampleSize());
     assertEquals(encodedImage3.getSize(), encodedImage4.getSize());
+    assertEquals(encodedImage3.getExifOrientation(), encodedImage4.getExifOrientation());
   }
 }

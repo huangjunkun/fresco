@@ -1,34 +1,35 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.platform;
 
-import javax.annotation.concurrent.ThreadSafe;
-
-import java.io.InputStream;
-import java.nio.ByteBuffer;
-
 import android.annotation.TargetApi;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.BitmapRegionDecoder;
+import android.graphics.Rect;
 import android.os.Build;
 import android.support.v4.util.Pools.SynchronizedPool;
-
 import com.facebook.common.internal.Preconditions;
 import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.logging.FLog;
 import com.facebook.common.references.CloseableReference;
 import com.facebook.common.streams.LimitedInputStream;
 import com.facebook.common.streams.TailAppendingInputStream;
+import com.facebook.imagepipeline.bitmaps.SimpleBitmapReleaser;
 import com.facebook.imagepipeline.image.EncodedImage;
 import com.facebook.imagepipeline.memory.BitmapPool;
 import com.facebook.imageutils.BitmapUtil;
 import com.facebook.imageutils.JfifUtil;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.ByteBuffer;
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Bitmap decoder for ART VM (Lollipop and up).
@@ -36,6 +37,8 @@ import com.facebook.imageutils.JfifUtil;
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 @ThreadSafe
 public class ArtDecoder implements PlatformDecoder {
+
+  private static final Class<?> TAG = ArtDecoder.class;
 
   /**
    * Size of temporary array. Value recommended by Android docs for decoding Bitmaps.
@@ -65,23 +68,24 @@ public class ArtDecoder implements PlatformDecoder {
 
   /**
    * Creates a bitmap from encoded bytes.
+   *
    * @param encodedImage the encoded image with a reference to the encoded bytes
-   * @param bitmapConfig the {@link android.graphics.Bitmap.Config}
-   * used to create the decoded Bitmap
+   * @param bitmapConfig the {@link android.graphics.Bitmap.Config} used to create the decoded
+   *     Bitmap
+   * @param regionToDecode optional image region to decode or null to decode the whole image
    * @return the bitmap
    * @exception java.lang.OutOfMemoryError if the Bitmap cannot be allocated
    */
   @Override
   public CloseableReference<Bitmap> decodeFromEncodedImage(
-      EncodedImage encodedImage,
-      Bitmap.Config bitmapConfig) {
+      EncodedImage encodedImage, Bitmap.Config bitmapConfig, @Nullable Rect regionToDecode) {
     final BitmapFactory.Options options = getDecodeOptionsForStream(encodedImage, bitmapConfig);
     boolean retryOnFail=options.inPreferredConfig != Bitmap.Config.ARGB_8888;
     try {
-      return decodeStaticImageFromStream(encodedImage.getInputStream(), options);
+      return decodeStaticImageFromStream(encodedImage.getInputStream(), options, regionToDecode);
     } catch (RuntimeException re) {
       if (retryOnFail) {
-        return decodeFromEncodedImage(encodedImage, Bitmap.Config.ARGB_8888);
+        return decodeFromEncodedImage(encodedImage, Bitmap.Config.ARGB_8888, regionToDecode);
       }
       throw re;
     }
@@ -89,9 +93,11 @@ public class ArtDecoder implements PlatformDecoder {
 
   /**
    * Creates a bitmap from encoded JPEG bytes. Supports a partial JPEG image.
+   *
    * @param encodedImage the encoded image with reference to the encoded bytes
-   * @param bitmapConfig the {@link android.graphics.Bitmap.Config}
-   * used to create the decoded Bitmap
+   * @param bitmapConfig the {@link android.graphics.Bitmap.Config} used to create the decoded
+   *     Bitmap
+   * @param regionToDecode optional image region to decode or null to decode the whole image
    * @param length the number of encoded bytes in the buffer
    * @return the bitmap
    * @exception java.lang.OutOfMemoryError if the Bitmap cannot be allocated
@@ -100,6 +106,7 @@ public class ArtDecoder implements PlatformDecoder {
   public CloseableReference<Bitmap> decodeJPEGFromEncodedImage(
       EncodedImage encodedImage,
       Bitmap.Config bitmapConfig,
+      @Nullable Rect regionToDecode,
       int length) {
     boolean isJpegComplete = encodedImage.isCompleteAt(length);
     final BitmapFactory.Options options = getDecodeOptionsForStream(encodedImage, bitmapConfig);
@@ -117,37 +124,74 @@ public class ArtDecoder implements PlatformDecoder {
     }
     boolean retryOnFail=options.inPreferredConfig != Bitmap.Config.ARGB_8888;
     try {
-      return decodeStaticImageFromStream(jpegDataStream, options);
+      return decodeStaticImageFromStream(jpegDataStream, options, regionToDecode);
     } catch (RuntimeException re) {
       if (retryOnFail) {
-        return decodeFromEncodedImage(encodedImage, Bitmap.Config.ARGB_8888);
+        return decodeFromEncodedImage(encodedImage, Bitmap.Config.ARGB_8888, regionToDecode);
       }
       throw re;
     }
   }
 
   protected CloseableReference<Bitmap> decodeStaticImageFromStream(
-      InputStream inputStream,
-      BitmapFactory.Options options) {
+      InputStream inputStream, BitmapFactory.Options options, @Nullable Rect regionToDecode) {
     Preconditions.checkNotNull(inputStream);
-    int sizeInBytes = BitmapUtil.getSizeInByteForBitmap(
-        options.outWidth,
-        options.outHeight,
-        options.inPreferredConfig);
+    int targetWidth = options.outWidth;
+    int targetHeight = options.outHeight;
+    if (regionToDecode != null) {
+      targetWidth = regionToDecode.width();
+      targetHeight = regionToDecode.height();
+    }
+    int sizeInBytes =
+        BitmapUtil.getSizeInByteForBitmap(targetWidth, targetHeight, options.inPreferredConfig);
     final Bitmap bitmapToReuse = mBitmapPool.get(sizeInBytes);
     if (bitmapToReuse == null) {
       throw new NullPointerException("BitmapPool.get returned null");
     }
     options.inBitmap = bitmapToReuse;
 
-    Bitmap decodedBitmap;
+    Bitmap decodedBitmap = null;
     ByteBuffer byteBuffer = mDecodeBuffers.acquire();
     if (byteBuffer == null) {
       byteBuffer = ByteBuffer.allocate(DECODE_BUFFER_SIZE);
     }
     try {
       options.inTempStorage = byteBuffer.array();
-      decodedBitmap = BitmapFactory.decodeStream(inputStream, null, options);
+      if (regionToDecode != null) {
+        BitmapRegionDecoder bitmapRegionDecoder = null;
+        try {
+          bitmapToReuse.reconfigure(targetWidth, targetHeight, options.inPreferredConfig);
+          bitmapRegionDecoder = BitmapRegionDecoder.newInstance(inputStream, true);
+          decodedBitmap = bitmapRegionDecoder.decodeRegion(regionToDecode, options);
+        } catch (IOException e) {
+          FLog.e(TAG, "Could not decode region %s, decoding full bitmap instead.", regionToDecode);
+        } finally {
+          if (bitmapRegionDecoder != null) {
+            bitmapRegionDecoder.recycle();
+          }
+        }
+      }
+      if (decodedBitmap == null) {
+        decodedBitmap = BitmapFactory.decodeStream(inputStream, null, options);
+      }
+    } catch (IllegalArgumentException e) {
+      mBitmapPool.release(bitmapToReuse);
+      // This is thrown if the Bitmap options are invalid, so let's just try to decode the bitmap
+      // as-is, which might be inefficient - but it works.
+      try {
+        // We need to reset the stream first
+        inputStream.reset();
+
+        Bitmap naiveDecodedBitmap = BitmapFactory.decodeStream(inputStream);
+        if (naiveDecodedBitmap == null) {
+          throw e;
+        }
+        return CloseableReference.of(naiveDecodedBitmap, SimpleBitmapReleaser.getInstance());
+      } catch (IOException re) {
+        // We throw the original exception instead since it's the one causing this workaround in the
+        // first place.
+        throw e;
+      }
     } catch (RuntimeException re) {
       mBitmapPool.release(bitmapToReuse);
       throw re;

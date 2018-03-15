@@ -1,19 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.common.webp;
 
-import java.io.UnsupportedEncodingException;
-
 import android.graphics.BitmapFactory;
 import android.os.Build;
 import android.util.Base64;
+import java.io.UnsupportedEncodingException;
+import javax.annotation.Nullable;
 
 public class WebpSupportStatus {
   public static final boolean sIsWebpSupportRequired =
@@ -24,19 +22,24 @@ public class WebpSupportStatus {
 
   public static final boolean sIsExtendedWebpSupported = isExtendedWebpSupported();
 
-  public static WebpBitmapFactory sWebpBitmapFactory = null;
+  public static @Nullable WebpBitmapFactory sWebpBitmapFactory = null;
 
-  public static boolean sWebpLibraryPresent = false;
+  private static boolean sWebpLibraryChecked = false;
 
-  static {
+  public static @Nullable WebpBitmapFactory loadWebpBitmapFactoryIfExists() {
+    if (sWebpLibraryChecked) {
+      return sWebpBitmapFactory;
+    }
+    WebpBitmapFactory loadedWebpBitmapFactory = null;
     try {
-      sWebpBitmapFactory = (WebpBitmapFactory) Class
+      loadedWebpBitmapFactory = (WebpBitmapFactory) Class
           .forName("com.facebook.webpsupport.WebpBitmapFactoryImpl")
           .newInstance();
-      sWebpLibraryPresent = true;
     } catch (Throwable e) {
-      sWebpLibraryPresent = false;
+      // Head in the sand
     }
+    sWebpLibraryChecked = true;
+    return loadedWebpBitmapFactory;
   }
 
   /**
@@ -116,7 +119,7 @@ public class WebpSupportStatus {
     return true;
   }
 
-  public static boolean isWebpPlatformSupported(
+  public static boolean isWebpSupportedByPlatform(
       final byte[] imageHeaderBytes,
       final int offset,
       final int headerSize) {

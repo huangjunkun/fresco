@@ -1,31 +1,28 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import com.facebook.common.internal.ImmutableMap;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.imagepipeline.cache.MemoryCache;
-import com.facebook.imagepipeline.cache.CacheKeyFactory;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.request.ImageRequest;
 import com.facebook.cache.common.CacheKey;
-
-import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.internal.ImmutableMap;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.cache.CacheKeyFactory;
+import com.facebook.imagepipeline.cache.MemoryCache;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.request.ImageRequest;
 
 /**
  * Memory cache producer for the encoded memory cache.
  */
 public class EncodedMemoryCacheProducer implements Producer<EncodedImage> {
-  @VisibleForTesting static final String PRODUCER_NAME = "EncodedMemoryCacheProducer";
-  @VisibleForTesting static final String VALUE_FOUND = "cached_value_found";
+
+  public static final String PRODUCER_NAME = "EncodedMemoryCacheProducer";
+  public static final String EXTRA_CACHED_VALUE_FOUND = ProducerConstants.EXTRA_CACHED_VALUE_FOUND;
 
   private final MemoryCache<CacheKey, PooledByteBuffer> mMemoryCache;
   private final CacheKeyFactory mCacheKeyFactory;
@@ -60,9 +57,12 @@ public class EncodedMemoryCacheProducer implements Producer<EncodedImage> {
           listener.onProducerFinishWithSuccess(
               requestId,
               PRODUCER_NAME,
-              listener.requiresExtraMap(requestId) ? ImmutableMap.of(VALUE_FOUND, "true") : null);
+              listener.requiresExtraMap(requestId)
+                  ? ImmutableMap.of(EXTRA_CACHED_VALUE_FOUND, "true")
+                  : null);
+          listener.onUltimateProducerReached(requestId, PRODUCER_NAME, true);
           consumer.onProgressUpdate(1f);
-          consumer.onNewResult(cachedEncodedImage, true);
+          consumer.onNewResult(cachedEncodedImage, Consumer.IS_LAST);
           return;
         } finally {
           EncodedImage.closeSafely(cachedEncodedImage);
@@ -74,58 +74,80 @@ public class EncodedMemoryCacheProducer implements Producer<EncodedImage> {
         listener.onProducerFinishWithSuccess(
             requestId,
             PRODUCER_NAME,
-            listener.requiresExtraMap(requestId) ? ImmutableMap.of(VALUE_FOUND, "false") : null);
-        consumer.onNewResult(null, true);
+            listener.requiresExtraMap(requestId)
+                ? ImmutableMap.of(EXTRA_CACHED_VALUE_FOUND, "false")
+                : null);
+        listener.onUltimateProducerReached(requestId, PRODUCER_NAME, false);
+        consumer.onNewResult(null, Consumer.IS_LAST);
         return;
       }
 
-      Consumer<EncodedImage> consumerOfInputProducer = new DelegatingConsumer<
-          EncodedImage,
-          EncodedImage>(consumer) {
-        @Override
-        public void onNewResultImpl(EncodedImage newResult, boolean isLast) {
-          // intermediate or null results are not cached, so we just forward them
-          if (!isLast || newResult == null) {
-            getConsumer().onNewResult(newResult, isLast);
-            return;
-          }
-          // cache and forward the last result
-          CloseableReference<PooledByteBuffer> ref = newResult.getByteBufferRef();
-          if (ref != null) {
-            CloseableReference<PooledByteBuffer> cachedResult;
-            try {
-              cachedResult = mMemoryCache.cache(cacheKey, ref);
-            } finally {
-              CloseableReference.closeSafely(ref);
-            }
-            if (cachedResult != null) {
-              EncodedImage cachedEncodedImage;
-              try {
-                cachedEncodedImage = new EncodedImage(cachedResult);
-                cachedEncodedImage.copyMetaDataFrom(newResult);
-              } finally {
-                CloseableReference.closeSafely(cachedResult);
-              }
-              try {
-                getConsumer().onProgressUpdate(1f);
-                getConsumer().onNewResult(cachedEncodedImage, true);
-                return;
-              } finally {
-                EncodedImage.closeSafely(cachedEncodedImage);
-              }
-            }
-          }
-          getConsumer().onNewResult(newResult, true);
-        }
-      };
+      Consumer consumerOfInputProducer =
+          new EncodedMemoryCacheConsumer(consumer, mMemoryCache, cacheKey);
 
       listener.onProducerFinishWithSuccess(
           requestId,
           PRODUCER_NAME,
-          listener.requiresExtraMap(requestId) ? ImmutableMap.of(VALUE_FOUND, "false") : null);
+          listener.requiresExtraMap(requestId)
+              ? ImmutableMap.of(EXTRA_CACHED_VALUE_FOUND, "false")
+              : null);
       mInputProducer.produceResults(consumerOfInputProducer, producerContext);
     } finally {
       CloseableReference.closeSafely(cachedReference);
+    }
+  }
+
+  private static class EncodedMemoryCacheConsumer
+      extends DelegatingConsumer<EncodedImage, EncodedImage> {
+
+    private final MemoryCache<CacheKey, PooledByteBuffer> mMemoryCache;
+    private final CacheKey mRequestedCacheKey;
+
+    public EncodedMemoryCacheConsumer(
+        Consumer<EncodedImage> consumer,
+        MemoryCache<CacheKey, PooledByteBuffer> memoryCache,
+        CacheKey requestedCacheKey) {
+      super(consumer);
+      mMemoryCache = memoryCache;
+      mRequestedCacheKey = requestedCacheKey;
+    }
+
+    @Override
+    public void onNewResultImpl(EncodedImage newResult, @Status int status) {
+      // intermediate, null or uncacheable results are not cached, so we just forward them
+      if (isNotLast(status) || newResult == null ||
+          statusHasAnyFlag(status, DO_NOT_CACHE_ENCODED | IS_PARTIAL_RESULT)) {
+        getConsumer().onNewResult(newResult, status);
+        return;
+      }
+
+      // cache and forward the last result
+      CloseableReference<PooledByteBuffer> ref = newResult.getByteBufferRef();
+      if (ref != null) {
+        CloseableReference<PooledByteBuffer> cachedResult;
+        try {
+          cachedResult = mMemoryCache.cache(mRequestedCacheKey, ref);
+        } finally {
+          CloseableReference.closeSafely(ref);
+        }
+        if (cachedResult != null) {
+          EncodedImage cachedEncodedImage;
+          try {
+            cachedEncodedImage = new EncodedImage(cachedResult);
+            cachedEncodedImage.copyMetaDataFrom(newResult);
+          } finally {
+            CloseableReference.closeSafely(cachedResult);
+          }
+          try {
+            getConsumer().onProgressUpdate(1f);
+            getConsumer().onNewResult(cachedEncodedImage, status);
+            return;
+          } finally {
+            EncodedImage.closeSafely(cachedEncodedImage);
+          }
+        }
+      }
+      getConsumer().onNewResult(newResult, status);
     }
   }
 }

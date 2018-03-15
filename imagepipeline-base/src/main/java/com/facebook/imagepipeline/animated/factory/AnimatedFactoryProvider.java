@@ -1,17 +1,17 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 package com.facebook.imagepipeline.animated.factory;
 
-import java.lang.reflect.Constructor;
-
+import com.facebook.cache.common.CacheKey;
 import com.facebook.imagepipeline.bitmaps.PlatformBitmapFactory;
+import com.facebook.imagepipeline.cache.CountingMemoryCache;
 import com.facebook.imagepipeline.core.ExecutorSupplier;
+import com.facebook.imagepipeline.image.CloseableImage;
+import java.lang.reflect.Constructor;
 
 public class AnimatedFactoryProvider {
 
@@ -21,39 +21,27 @@ public class AnimatedFactoryProvider {
 
   public static AnimatedFactory getAnimatedFactory(
       PlatformBitmapFactory platformBitmapFactory,
-      ExecutorSupplier executorSupplier) {
+      ExecutorSupplier executorSupplier,
+      CountingMemoryCache<CacheKey, CloseableImage> backingCache) {
     if (!sImplLoaded) {
       try {
         final Class<?> clazz =
-            Class.forName("com.facebook.imagepipeline.animated.factory.AnimatedFactoryImplSupport");
+            Class.forName("com.facebook.fresco.animation.factory.AnimatedFactoryV2Impl");
         final Constructor<?> constructor = clazz.getConstructor(
             PlatformBitmapFactory.class,
-            ExecutorSupplier.class);
+            ExecutorSupplier.class,
+            CountingMemoryCache.class);
         sImpl = (AnimatedFactory) constructor.newInstance(
             platformBitmapFactory,
-            executorSupplier);
+            executorSupplier,
+            backingCache);
       } catch (Throwable e) {
         // Head in the sand
       }
       if (sImpl != null) {
         sImplLoaded = true;
-        return sImpl;
       }
-      try {
-        final Class<?> clazz =
-            Class.forName("com.facebook.imagepipeline.animated.factory.AnimatedFactoryImpl");
-        final Constructor<?> constructor = clazz.getConstructor(
-            PlatformBitmapFactory.class,
-            ExecutorSupplier.class);
-        sImpl = (AnimatedFactory) constructor.newInstance(
-            platformBitmapFactory,
-            executorSupplier);
-      } catch (Throwable e) {
-        // Head in the sand
-      }
-      sImplLoaded = true;
     }
     return sImpl;
   }
-
 }

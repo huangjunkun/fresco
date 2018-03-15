@@ -1,19 +1,15 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.core;
 
 import android.os.Process;
-
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
 /**
  * Basic implementation of {@link ExecutorSupplier}.
@@ -32,19 +28,26 @@ public class DefaultExecutorSupplier implements ExecutorSupplier {
   private final Executor mLightWeightBackgroundExecutor;
 
   public DefaultExecutorSupplier(int numCpuBoundThreads) {
-    ThreadFactory backgroundPriorityThreadFactory =
-        new PriorityThreadFactory(Process.THREAD_PRIORITY_BACKGROUND);
-
-    mIoBoundExecutor = Executors.newFixedThreadPool(NUM_IO_BOUND_THREADS);
-    mDecodeExecutor = Executors.newFixedThreadPool(
-        numCpuBoundThreads,
-        backgroundPriorityThreadFactory);
-    mBackgroundExecutor = Executors.newFixedThreadPool(
-        numCpuBoundThreads,
-        backgroundPriorityThreadFactory);
-    mLightWeightBackgroundExecutor = Executors.newFixedThreadPool(
-        NUM_LIGHTWEIGHT_BACKGROUND_THREADS,
-        backgroundPriorityThreadFactory);
+    mIoBoundExecutor =
+        Executors.newFixedThreadPool(
+            NUM_IO_BOUND_THREADS,
+            new PriorityThreadFactory(
+                Process.THREAD_PRIORITY_BACKGROUND, "FrescoIoBoundExecutor", true));
+    mDecodeExecutor =
+        Executors.newFixedThreadPool(
+            numCpuBoundThreads,
+            new PriorityThreadFactory(
+                Process.THREAD_PRIORITY_BACKGROUND, "FrescoDecodeExecutor", true));
+    mBackgroundExecutor =
+        Executors.newFixedThreadPool(
+            numCpuBoundThreads,
+            new PriorityThreadFactory(
+                Process.THREAD_PRIORITY_BACKGROUND, "FrescoBackgroundExecutor", true));
+    mLightWeightBackgroundExecutor =
+        Executors.newFixedThreadPool(
+            NUM_LIGHTWEIGHT_BACKGROUND_THREADS,
+            new PriorityThreadFactory(
+                Process.THREAD_PRIORITY_BACKGROUND, "FrescoLightWeightBackgroundExecutor", true));
 
   }
 

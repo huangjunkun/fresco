@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.drawable;
 
 import android.graphics.Matrix;
+import android.graphics.PointF;
 import android.graphics.Rect;
-
+import android.graphics.drawable.Drawable;
 import javax.annotation.Nullable;
 
 /**
@@ -30,64 +29,69 @@ public class ScalingUtils {
   public interface ScaleType {
 
     /**
-     * Scales width and height independently, so that the child matches the parent exactly.
-     * This may change the aspect ratio of the child.
+     * Scales width and height independently, so that the child matches the parent exactly. This may
+     * change the aspect ratio of the child.
      */
-    static final ScaleType FIT_XY = ScaleTypeFitXY.INSTANCE;
+    ScaleType FIT_XY = ScaleTypeFitXY.INSTANCE;
 
     /**
      * Scales the child so that it fits entirely inside the parent. At least one dimension (width or
-     * height) will fit exactly. Aspect ratio is preserved.
-     * Child is aligned to the top-left corner of the parent.
+     * height) will fit exactly. Aspect ratio is preserved. Child is aligned to the top-left corner
+     * of the parent.
      */
-    static final ScaleType FIT_START = ScaleTypeFitStart.INSTANCE;
+    ScaleType FIT_START = ScaleTypeFitStart.INSTANCE;
 
     /**
      * Scales the child so that it fits entirely inside the parent. At least one dimension (width or
-     * height) will fit exactly. Aspect ratio is preserved.
-     * Child is centered within the parent's bounds.
+     * height) will fit exactly. Aspect ratio is preserved. Child is centered within the parent's
+     * bounds.
      */
-    static final ScaleType FIT_CENTER = ScaleTypeFitCenter.INSTANCE;
+    ScaleType FIT_CENTER = ScaleTypeFitCenter.INSTANCE;
 
     /**
      * Scales the child so that it fits entirely inside the parent. At least one dimension (width or
-     * height) will fit exactly. Aspect ratio is preserved.
-     * Child is aligned to the bottom-right corner of the parent.
+     * height) will fit exactly. Aspect ratio is preserved. Child is aligned to the bottom-right
+     * corner of the parent.
      */
-    static final ScaleType FIT_END = ScaleTypeFitEnd.INSTANCE;
+    ScaleType FIT_END = ScaleTypeFitEnd.INSTANCE;
 
-    /**
-     * Performs no scaling.
-     * Child is centered within parent's bounds.
-     */
-    static final ScaleType CENTER = ScaleTypeCenter.INSTANCE;
+    /** Performs no scaling. Child is centered within parent's bounds. */
+    ScaleType CENTER = ScaleTypeCenter.INSTANCE;
 
     /**
      * Scales the child so that it fits entirely inside the parent. Unlike FIT_CENTER, if the child
-     * is smaller, no up-scaling will be performed. Aspect ratio is preserved.
-     * Child is centered within parent's bounds.
+     * is smaller, no up-scaling will be performed. Aspect ratio is preserved. Child is centered
+     * within parent's bounds.
      */
-    static final ScaleType CENTER_INSIDE = ScaleTypeCenterInside.INSTANCE;
+    ScaleType CENTER_INSIDE = ScaleTypeCenterInside.INSTANCE;
 
     /**
      * Scales the child so that both dimensions will be greater than or equal to the corresponding
-     * dimension of the parent. At least one dimension (width or height) will fit exactly.
-     * Child is centered within parent's bounds.
+     * dimension of the parent. At least one dimension (width or height) will fit exactly. Child is
+     * centered within parent's bounds.
      */
-    static final ScaleType CENTER_CROP = ScaleTypeCenterCrop.INSTANCE;
+    ScaleType CENTER_CROP = ScaleTypeCenterCrop.INSTANCE;
 
     /**
      * Scales the child so that both dimensions will be greater than or equal to the corresponding
-     * dimension of the parent. At least one dimension (width or height) will fit exactly.
-     * The child's focus point will be centered within the parent's bounds as much as possible
-     * without leaving empty space.
-     * It is guaranteed that the focus point will be visible and centered as much as possible.
-     * If the focus point is set to (0.5f, 0.5f), result will be equivalent to CENTER_CROP.
+     * dimension of the parent. At least one dimension (width or height) will fit exactly. The
+     * child's focus point will be centered within the parent's bounds as much as possible without
+     * leaving empty space. It is guaranteed that the focus point will be visible and centered as
+     * much as possible. If the focus point is set to (0.5f, 0.5f), result will be equivalent to
+     * CENTER_CROP.
      */
-    static final ScaleType FOCUS_CROP = ScaleTypeFocusCrop.INSTANCE;
+    ScaleType FOCUS_CROP = ScaleTypeFocusCrop.INSTANCE;
+
+    /**
+     * Scales the child so that it fits entirely inside the parent. At least one dimension (width or
+     * height) will fit exactly. Aspect ratio is preserved. Child is aligned to the bottom-left
+     * corner of the parent.
+     */
+    ScaleType FIT_BOTTOM_START = ScaleTypeFitBottomStart.INSTANCE;
 
     /**
      * Gets transformation matrix based on the scale type.
+     *
      * @param outTransform out matrix to store result
      * @param parentBounds parent bounds
      * @param childWidth child width
@@ -105,29 +109,28 @@ public class ScalingUtils {
         float focusY);
   }
 
-  /**
-   * Gets transformation based on the scale type.
-   * @param transform out matrix to store result
-   * @param parentBounds parent bounds
-   * @param childWidth child width
-   * @param childHeight child height
-   * @param focusX focus point x coordinate, relative [0...1]
-   * @param focusY focus point y coordinate, relative [0...1]
-   * @param scaleType scale type to be used
-   * @return reference to the out matrix
-   *
-   * @deprecated use {@code ScaleType.getTransform}
-   */
-  @Deprecated
-  public static Matrix getTransform(
-      final Matrix transform,
-      final Rect parentBounds,
-      final int childWidth,
-      final int childHeight,
-      final float focusX,
-      final float focusY,
-      final ScaleType scaleType) {
-    return scaleType.getTransform(transform, parentBounds, childWidth, childHeight, focusX, focusY);
+  @Nullable
+  public static ScaleTypeDrawable getActiveScaleTypeDrawable(Drawable drawable) {
+    if (drawable == null) {
+      return null;
+    } else if (drawable instanceof ScaleTypeDrawable) {
+      return (ScaleTypeDrawable) drawable;
+    } else if (drawable instanceof DrawableParent) {
+      final Drawable childDrawable = ((DrawableParent) drawable).getDrawable();
+      return getActiveScaleTypeDrawable(childDrawable);
+    } else if (drawable instanceof ArrayDrawable) {
+      final ArrayDrawable fadeDrawable = (ArrayDrawable) drawable;
+      final int numLayers = fadeDrawable.getNumberOfLayers();
+
+      for (int i = 0; i < numLayers; i++) {
+        final Drawable childDrawable = fadeDrawable.getDrawable(i);
+        final ScaleTypeDrawable result = getActiveScaleTypeDrawable(childDrawable);
+        if (result != null) {
+          return result;
+        }
+      }
+    }
+    return null;
   }
 
   /**
@@ -161,7 +164,9 @@ public class ScalingUtils {
   }
 
   private static class ScaleTypeFitXY extends AbstractScaleType {
+
     public static final ScaleType INSTANCE = new ScaleTypeFitXY();
+
     @Override
     public void getTransformImpl(
         Matrix outTransform,
@@ -177,10 +182,17 @@ public class ScalingUtils {
       outTransform.setScale(scaleX, scaleY);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
     }
+
+    @Override
+    public String toString() {
+      return "fit_xy";
+    }
   }
 
   private static class ScaleTypeFitStart extends AbstractScaleType {
+
     public static final ScaleType INSTANCE = new ScaleTypeFitStart();
+
     @Override
     public void getTransformImpl(
         Matrix outTransform,
@@ -196,6 +208,38 @@ public class ScalingUtils {
       float dy = parentRect.top;
       outTransform.setScale(scale, scale);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
+    }
+
+    @Override
+    public String toString() {
+      return "fit_start";
+    }
+  }
+
+  private static class ScaleTypeFitBottomStart extends AbstractScaleType {
+
+    public static final ScaleType INSTANCE = new ScaleTypeFitBottomStart();
+
+    @Override
+    public void getTransformImpl(
+        Matrix outTransform,
+        Rect parentRect,
+        int childWidth,
+        int childHeight,
+        float focusX,
+        float focusY,
+        float scaleX,
+        float scaleY) {
+      float scale = Math.min(scaleX, scaleY);
+      float dx = parentRect.left;
+      float dy = parentRect.top + (parentRect.height() - childHeight * scale);
+      outTransform.setScale(scale, scale);
+      outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
+    }
+
+    @Override
+    public String toString() {
+      return "fit_bottom_start";
     }
   }
 
@@ -219,6 +263,11 @@ public class ScalingUtils {
       outTransform.setScale(scale, scale);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
     }
+
+    @Override
+    public String toString() {
+      return "fit_center";
+    }
   }
 
   private static class ScaleTypeFitEnd extends AbstractScaleType {
@@ -241,6 +290,11 @@ public class ScalingUtils {
       outTransform.setScale(scale, scale);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
     }
+
+    @Override
+    public String toString() {
+      return "fit_end";
+    }
   }
 
   private static class ScaleTypeCenter extends AbstractScaleType {
@@ -260,6 +314,11 @@ public class ScalingUtils {
       float dx = parentRect.left + (parentRect.width() - childWidth) * 0.5f;
       float dy = parentRect.top + (parentRect.height() - childHeight) * 0.5f;
       outTransform.setTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
+    }
+
+    @Override
+    public String toString() {
+      return "center";
     }
   }
 
@@ -282,6 +341,11 @@ public class ScalingUtils {
       float dy = parentRect.top + (parentRect.height() - childHeight * scale) * 0.5f;
       outTransform.setScale(scale, scale);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
+    }
+
+    @Override
+    public String toString() {
+      return "center_inside";
     }
   }
 
@@ -311,6 +375,11 @@ public class ScalingUtils {
       }
       outTransform.setScale(scale, scale);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
+    }
+
+    @Override
+    public String toString() {
+      return "center_crop";
     }
   }
 
@@ -343,6 +412,11 @@ public class ScalingUtils {
       outTransform.setScale(scale, scale);
       outTransform.postTranslate((int) (dx + 0.5f), (int) (dy + 0.5f));
     }
+
+    @Override
+    public String toString() {
+      return "focus_crop";
+    }
   }
 
   /**
@@ -353,11 +427,11 @@ public class ScalingUtils {
     /**
      * Returns the internal state. The returned object must be immutable!
      *
-     * The returned state may be used for caching the result of {@code ScaleType.getTransform}.
-     * If null state is returned, the result will not be cached. If non-null state is returned,
-     * the old transformation may be used if produced with an equal state.
+     * <p>The returned state may be used for caching the result of {@code ScaleType.getTransform}.
+     * If null state is returned, the result will not be cached. If non-null state is returned, the
+     * old transformation may be used if produced with an equal state.
      */
-    public Object getState();
+    Object getState();
   }
 
   /**
@@ -369,6 +443,8 @@ public class ScalingUtils {
     private final ScaleType mScaleTypeTo;
     private final @Nullable Rect mBoundsFrom;
     private final @Nullable Rect mBoundsTo;
+    private final @Nullable PointF mFocusPointFrom;
+    private final @Nullable PointF mFocusPointTo;
     private final float[] mMatrixValuesFrom = new float[9];
     private final float[] mMatrixValuesTo = new float[9];
     private final float[] mMatrixValuesInterpolated = new float[9];
@@ -379,11 +455,23 @@ public class ScalingUtils {
         ScaleType scaleTypeFrom,
         ScaleType scaleTypeTo,
         @Nullable Rect boundsFrom,
-        @Nullable Rect boundsTo) {
+        @Nullable Rect boundsTo,
+        @Nullable PointF focusPointFrom,
+        @Nullable PointF focusPointTo) {
       mScaleTypeFrom = scaleTypeFrom;
       mScaleTypeTo = scaleTypeTo;
       mBoundsFrom = boundsFrom;
       mBoundsTo = boundsTo;
+      mFocusPointFrom = focusPointFrom;
+      mFocusPointTo = focusPointTo;
+    }
+
+    public InterpolatingScaleType(
+        ScaleType scaleTypeFrom,
+        ScaleType scaleTypeTo,
+        @Nullable Rect boundsFrom,
+        @Nullable Rect boundsTo) {
+      this(scaleTypeFrom, scaleTypeTo, boundsFrom, boundsTo, null, null);
     }
 
     public InterpolatingScaleType(ScaleType scaleTypeFrom, ScaleType scaleTypeTo) {
@@ -404,6 +492,14 @@ public class ScalingUtils {
 
     public @Nullable Rect getBoundsTo() {
       return mBoundsTo;
+    }
+
+    public @Nullable PointF getFocusPointFrom() {
+      return mFocusPointFrom;
+    }
+
+    public @Nullable PointF getFocusPointTo() {
+      return mFocusPointTo;
     }
 
     /**
@@ -440,9 +536,21 @@ public class ScalingUtils {
       Rect boundsFrom = (mBoundsFrom != null) ? mBoundsFrom : parentBounds;
       Rect boundsTo = (mBoundsTo != null) ? mBoundsTo : parentBounds;
 
-      mScaleTypeFrom.getTransform(transform, boundsFrom, childWidth, childHeight, focusX, focusY);
+      mScaleTypeFrom.getTransform(
+          transform,
+          boundsFrom,
+          childWidth,
+          childHeight,
+          mFocusPointFrom == null ? focusX : mFocusPointFrom.x,
+          mFocusPointFrom == null ? focusY : mFocusPointFrom.y);
       transform.getValues(mMatrixValuesFrom);
-      mScaleTypeTo.getTransform(transform, boundsTo, childWidth, childHeight, focusX, focusY);
+      mScaleTypeTo.getTransform(
+          transform,
+          boundsTo,
+          childWidth,
+          childHeight,
+          mFocusPointTo == null ? focusX : mFocusPointTo.x,
+          mFocusPointTo == null ? focusY : mFocusPointTo.y);
       transform.getValues(mMatrixValuesTo);
 
       for (int i = 0; i < 9; i++) {
@@ -451,6 +559,16 @@ public class ScalingUtils {
       }
       transform.setValues(mMatrixValuesInterpolated);
       return transform;
+    }
+
+    @Override
+    public String toString() {
+      return String.format(
+          "InterpolatingScaleType(%s (%s) -> %s (%s))",
+          String.valueOf(mScaleTypeFrom),
+          String.valueOf(mFocusPointFrom),
+          String.valueOf(mScaleTypeTo),
+          String.valueOf(mFocusPointTo));
     }
   }
 }

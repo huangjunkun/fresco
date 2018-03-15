@@ -1,26 +1,24 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
+import android.net.Uri;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.util.UriUtil;
+import com.facebook.imagepipeline.image.EncodedImage;
 import java.io.IOException;
+import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-
-import android.net.Uri;
-
-import com.facebook.common.internal.VisibleForTesting;
-import com.facebook.imagepipeline.image.EncodedImage;
 
 /**
  * Network fetcher that uses the simplest Android stack.
@@ -75,16 +73,24 @@ public class HttpUrlConnectionNetworkFetcher extends BaseNetworkFetcher<FetchSta
   @VisibleForTesting
   void fetchSync(FetchState fetchState, Callback callback) {
     HttpURLConnection connection = null;
-
+    InputStream is = null;
     try {
       connection = downloadFrom(fetchState.getUri(), MAX_REDIRECTS);
 
       if (connection != null) {
-        callback.onResponse(connection.getInputStream(), -1);
+        is = connection.getInputStream();
+        callback.onResponse(is, -1);
       }
     } catch (IOException e) {
       callback.onFailure(e);
     } finally {
+      if (is != null) {
+        try {
+          is.close();
+        } catch (IOException e) {
+          // do nothing and ignore the IOException here
+        }
+      }
       if (connection != null) {
         connection.disconnect();
       }
@@ -124,7 +130,7 @@ public class HttpUrlConnectionNetworkFetcher extends BaseNetworkFetcher<FetchSta
 
   @VisibleForTesting
   static HttpURLConnection openConnectionTo(Uri uri) throws IOException {
-    URL url = new URL(uri.toString());
+    URL url = UriUtil.uriToUrl(uri);
     return (HttpURLConnection) url.openConnection();
   }
 

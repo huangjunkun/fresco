@@ -1,29 +1,28 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import java.io.ByteArrayInputStream;
-import java.io.InputStream;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.mockito.Mockito.*;
 
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
 import android.net.Uri;
-
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.common.Priority;
 import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.request.ImageRequest;
 import com.facebook.imagepipeline.testing.FakeClock;
 import com.facebook.imagepipeline.testing.TestExecutorService;
-
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
@@ -31,9 +30,6 @@ import org.mockito.invocation.*;
 import org.mockito.stubbing.*;
 import org.robolectric.*;
 import org.robolectric.annotation.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Basic tests for LocalResourceFetchProducer
@@ -73,8 +69,8 @@ public class LocalAssetFetchProducerTest {
     mLocalAssetFetchProducer = new LocalAssetFetchProducer(
         mExecutor,
         mPooledByteBufferFactory,
-        mAssetManager,
-        false);
+        mAssetManager
+    );
 
     mProducerContext = new SettableProducerContext(
         mImageRequest,
@@ -96,7 +92,7 @@ public class LocalAssetFetchProducerTest {
           }
         })
         .when(mConsumer)
-        .onNewResult(notNull(EncodedImage.class), anyBoolean());
+        .onNewResult(notNull(EncodedImage.class), anyInt());
   }
 
   @After
@@ -115,6 +111,15 @@ public class LocalAssetFetchProducerTest {
 
     mLocalAssetFetchProducer.produceResults(mConsumer, mProducerContext);
     mExecutor.runUntilIdle();
+
+    assertEquals(
+        2,
+        mCapturedEncodedImage.getByteBufferRef()
+            .getUnderlyingReferenceTestOnly().getRefCountTestOnly());
+    assertSame(pooledByteBuffer, mCapturedEncodedImage.getByteBufferRef().get());
+    verify(mProducerListener).onProducerStart(mRequestId, PRODUCER_NAME);
+    verify(mProducerListener).onProducerFinishWithSuccess(mRequestId, PRODUCER_NAME, null);
+    verify(mProducerListener).onUltimateProducerReached(mRequestId, PRODUCER_NAME, true);
   }
 
   @Test(expected = RuntimeException.class)
@@ -123,10 +128,12 @@ public class LocalAssetFetchProducerTest {
         .thenThrow(mException);
     mLocalAssetFetchProducer.produceResults(mConsumer, mProducerContext);
     mExecutor.runUntilIdle();
+
     verify(mConsumer).onFailure(mException);
     verify(mProducerListener).onProducerStart(mRequestId, PRODUCER_NAME);
     verify(mProducerListener).onProducerFinishWithFailure(
         mRequestId, PRODUCER_NAME, mException, null);
+    verify(mProducerListener).onUltimateProducerReached(mRequestId, PRODUCER_NAME, false);
   }
 
 }

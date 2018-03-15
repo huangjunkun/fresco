@@ -1,38 +1,11 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.cache;
-
-import android.graphics.Bitmap;
-import android.os.SystemClock;
-
-import com.facebook.common.internal.Supplier;
-import com.facebook.common.memory.MemoryTrimType;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.common.references.ResourceReleaser;
-import com.facebook.imagepipeline.bitmaps.PlatformBitmapFactory;
-
-import com.android.internal.util.Predicate;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.InOrder;
-import org.mockito.Mock;
-import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
-import org.powermock.api.mockito.PowerMockito;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareForTest;
-import org.powermock.modules.junit4.rule.PowerMockRule;
-import org.robolectric.RobolectricTestRunner;
-import org.robolectric.annotation.Config;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -52,6 +25,29 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import android.graphics.Bitmap;
+import android.os.SystemClock;
+import com.android.internal.util.Predicate;
+import com.facebook.common.internal.Supplier;
+import com.facebook.common.memory.MemoryTrimType;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.common.references.ResourceReleaser;
+import com.facebook.imagepipeline.bitmaps.PlatformBitmapFactory;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.MockitoAnnotations;
+import org.powermock.api.mockito.PowerMockito;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareForTest;
+import org.powermock.modules.junit4.rule.PowerMockRule;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
 
 @RunWith(RobolectricTestRunner.class)
 @PrepareForTest({SystemClock.class})
@@ -213,9 +209,16 @@ public class CountingMemoryCacheTest {
 
   @Test
   public void testCantReuseNonExclusive() {
-    mCache.cache(KEY, newReference(100), mEntryStateObserver);
-    assertNull(mCache.reuse(KEY));
+    CloseableReference<Integer> cachedRef =
+        mCache.cache(KEY, newReference(100), mEntryStateObserver);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(0, 0);
+    CloseableReference<Integer> reusedRef = mCache.reuse(KEY);
+    assertNull(reusedRef);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(0, 0);
     verify(mEntryStateObserver, never()).onExclusivityChanged(anyString(), anyBoolean());
+    cachedRef.close();
   }
 
   @Test
@@ -224,11 +227,61 @@ public class CountingMemoryCacheTest {
         mCache.cache(KEY, newReference(100), mEntryStateObserver);
     cachedRef.close();
     verify(mEntryStateObserver).onExclusivityChanged(KEY, true);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(1, 100);
     cachedRef = mCache.reuse(KEY);
     assertNotNull(cachedRef);
     verify(mEntryStateObserver).onExclusivityChanged(KEY, false);
+    assertTotalSize(0, 0);
+    assertExclusivelyOwnedSize(0, 0);
     cachedRef.close();
     verify(mEntryStateObserver).onExclusivityChanged(KEY, true);
+  }
+
+  @Test
+  public void testReuseExclusive_CacheSameItem() {
+    CloseableReference<Integer> cachedRef =
+        mCache.cache(KEY, newReference(100), mEntryStateObserver);
+    cachedRef.close();
+    verify(mEntryStateObserver).onExclusivityChanged(KEY, true);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(1, 100);
+    cachedRef = mCache.reuse(KEY);
+    assertNotNull(cachedRef);
+    verify(mEntryStateObserver).onExclusivityChanged(KEY, false);
+    assertTotalSize(0, 0);
+    assertExclusivelyOwnedSize(0, 0);
+    CloseableReference<Integer> newItem = mCache.cache(KEY, cachedRef);
+    cachedRef.close();
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(0, 0);
+    newItem.close();
+    verify(mEntryStateObserver).onExclusivityChanged(KEY, true);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(1, 100);
+  }
+
+  @Test
+  public void testReuseExclusive_CacheSameItemWithDifferentKey() {
+    CloseableReference<Integer> cachedRef =
+        mCache.cache(KEY, newReference(100), mEntryStateObserver);
+    cachedRef.close();
+    verify(mEntryStateObserver).onExclusivityChanged(KEY, true);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(1, 100);
+    cachedRef = mCache.reuse(KEY);
+    assertNotNull(cachedRef);
+    verify(mEntryStateObserver).onExclusivityChanged(KEY, false);
+    assertTotalSize(0, 0);
+    assertExclusivelyOwnedSize(0, 0);
+    CloseableReference<Integer> newItem = mCache.cache(KEYS[2], cachedRef);
+    cachedRef.close();
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(0, 0);
+    newItem.close();
+    verify(mEntryStateObserver).onExclusivityChanged(KEY, true);
+    assertTotalSize(1, 100);
+    assertExclusivelyOwnedSize(1, 100);
   }
 
   @Test
@@ -675,6 +728,27 @@ public class CountingMemoryCacheTest {
     assertExclusivelyOwnedSize(0, 0);
     inOrder.verify(mReleaser).release(104);
     inOrder.verify(mReleaser).release(105);
+  }
+
+  @Test
+  public void testContains() {
+    assertFalse(mCache.contains(KEY));
+
+    CloseableReference<Integer> newRef = mCache.cache(KEY, newReference(100));
+
+    assertTrue(mCache.contains(KEY));
+    assertFalse(mCache.contains(KEYS[0]));
+
+    newRef.close();
+
+    assertTrue(mCache.contains(KEY));
+    assertFalse(mCache.contains(KEYS[0]));
+
+    CloseableReference<Integer> reuse = mCache.reuse(KEY);
+    reuse.close();
+
+    assertFalse(mCache.contains(KEY));
+    assertFalse(mCache.contains(KEYS[0]));
   }
 
   private CloseableReference<Integer> newReference(int size) {

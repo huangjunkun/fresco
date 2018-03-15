@@ -1,27 +1,29 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.cache.disk;
 
-import java.io.File;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.RandomAccessFile;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import static org.fest.assertions.api.Assertions.assertThat;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 import android.content.Context;
-
 import com.facebook.binaryresource.BinaryResource;
 import com.facebook.cache.common.CacheErrorLogger;
 import com.facebook.cache.common.CacheEvent;
@@ -38,7 +40,17 @@ import com.facebook.common.internal.ByteStreams;
 import com.facebook.common.internal.Supplier;
 import com.facebook.common.internal.Suppliers;
 import com.facebook.common.time.SystemClock;
-
+import com.facebook.imagepipeline.testing.FakeClock;
+import com.facebook.imagepipeline.testing.TestExecutorService;
+import java.io.File;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.RandomAccessFile;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -51,21 +63,6 @@ import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
 import org.powermock.modules.junit4.rule.PowerMockRule;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
-
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-import static org.mockito.Mockito.inOrder;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
-import static org.mockito.Mockito.when;
 
 /**
  * Test for {@link DiskStorageCache}
@@ -91,12 +88,14 @@ public class DiskStorageCacheTest {
   private CacheEventListener mCacheEventListener;
   private InOrder mCacheEventListenerInOrder;
   private SystemClock mClock;
+  private TestExecutorService mBackgroundExecutor;
 
   @Before
   public void setUp() {
     mClock = mock(SystemClock.class);
     PowerMockito.mockStatic(SystemClock.class);
     PowerMockito.when(SystemClock.get()).thenReturn(mClock);
+    mBackgroundExecutor = new TestExecutorService(new FakeClock());
     mDiskTrimmableRegistry = mock(DiskTrimmableRegistry.class);
     mCacheEventListener = mock(CacheEventListener.class);
     mCacheEventListenerInOrder = inOrder(mCacheEventListener);
@@ -150,7 +149,7 @@ public class DiskStorageCacheTest {
         mock(CacheErrorLogger.class),
         mDiskTrimmableRegistry,
         context,
-        Executors.newSingleThreadExecutor(),
+        mBackgroundExecutor,
         indexPopulateAtStartupEnabled);
   }
 
@@ -561,6 +560,7 @@ public class DiskStorageCacheTest {
     // A new cache object in the same directory. Equivalent to a process restart.
     // Index may not yet updated.
     DiskStorageCache cache2 = createDiskCache(mStorage, false);
+    assertTrue(cache2.isIndexReady());
     assertFalse(cache2.hasKeySync(key));
     assertTrue(cache2.hasKey(key));
     // hasKey() adds item to the index
@@ -569,34 +569,37 @@ public class DiskStorageCacheTest {
 
   @Test
   public void testHasKeyWithoutPopulateAtStartupWithAwaitingIndex() throws Exception {
-    CacheKey key = putOneThingInCache();
     // A new cache object in the same directory. Equivalent to a process restart.
     // Index may not yet updated.
     DiskStorageCache cache2 = createDiskCache(mStorage, false);
+    CacheKey key = putOneThingInCache();
     // Wait for index populated in cache before use of cache
     cache2.awaitIndex();
+    assertTrue(cache2.isIndexReady());
     assertTrue(cache2.hasKey(key));
     assertTrue(cache2.hasKeySync(key));
   }
 
   @Test
   public void testHasKeyWithPopulateAtStartupWithAwaitingIndex() throws Exception {
-    CacheKey key = putOneThingInCache();
+    DiskStorageCache cache2 = createDiskCache(mStorage, false);
     // A new cache object in the same directory. Equivalent to a process restart.
     // Index should be updated.
-    DiskStorageCache cache2 = createDiskCache(mStorage, true);
+    CacheKey key = putOneThingInCache(cache2);
     // Wait for index populated in cache before use of cache
     cache2.awaitIndex();
+    assertTrue(cache2.isIndexReady());
     assertTrue(cache2.hasKeySync(key));
     assertTrue(cache2.hasKey(key));
   }
 
   @Test
   public void testHasKeyWithPopulateAtStartupWithoutAwaitingIndex() throws Exception {
-    CacheKey key = putOneThingInCache();
+    DiskStorageCache cache2 = createDiskCache(mStorage, true);
+    CacheKey key = putOneThingInCache(cache2);
     // A new cache object in the same directory. Equivalent to a process restart.
     // Index may not yet updated.
-    DiskStorageCache cache2 = createDiskCache(mStorage, true);
+    assertFalse(cache2.isIndexReady());
     assertTrue(cache2.hasKey(key));
     assertTrue(cache2.hasKeySync(key));
   }
@@ -608,6 +611,29 @@ public class DiskStorageCacheTest {
     // Index may not yet updated.
     DiskStorageCache cache2 = createDiskCache(mStorage, false);
     assertNotNull(cache2.getResource(key));
+  }
+
+  @Test
+  public void testIndexIsImmediatelyReadyIfIndexAtStartupIsOff() {
+    DiskStorageCache cache = createDiskCache(mStorage, false);
+
+    assertThat(cache.isIndexReady()).isTrue();
+  }
+
+  @Test
+  public void testIndexIsNotImmediatelyReadyIfIndexAtStartupIsOff() {
+    DiskStorageCache cache = createDiskCache(mStorage, true);
+
+    assertThat(cache.isIndexReady()).isFalse();
+  }
+
+  @Test
+  public void testIndexIsReadyIfIndexAtStartupIsOnAndTheBackgroundExecutorHasRun() {
+    DiskStorageCache cache = createDiskCache(mStorage, true);
+
+    mBackgroundExecutor.runUntilIdle();
+
+    assertThat(cache.isIndexReady()).isTrue();
   }
 
   @Test
@@ -656,10 +682,14 @@ public class DiskStorageCacheTest {
   }
 
   private CacheKey putOneThingInCache() throws IOException {
+    return putOneThingInCache(mCache);
+  }
+
+  private CacheKey putOneThingInCache(DiskStorageCache cache) throws IOException {
     CacheKey key = new SimpleCacheKey("foo");
     byte[] value1 = new byte[101];
     value1[80] = 'c';
-    mCache.insert(key, WriterCallbacks.from(value1));
+    cache.insert(key, WriterCallbacks.from(value1));
     return key;
   }
 

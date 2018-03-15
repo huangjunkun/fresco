@@ -1,27 +1,25 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.memory;
 
-import java.io.ByteArrayInputStream;
-
-import com.facebook.imagepipeline.testing.FakeNativeMemoryChunkPool;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.facebook.common.internal.ImmutableMap;
+import com.facebook.common.memory.ByteArrayPool;
+import com.facebook.common.memory.PooledByteStreams;
+import com.facebook.imagepipeline.testing.FakeNativeMemoryChunkPool;
+import java.io.ByteArrayInputStream;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 /**
  * Basic tests for {@link NativePooledByteBufferFactory}

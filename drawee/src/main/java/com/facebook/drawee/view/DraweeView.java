@@ -1,15 +1,11 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.view;
-
-import javax.annotation.Nullable;
 
 import android.annotation.TargetApi;
 import android.content.Context;
@@ -20,11 +16,12 @@ import android.net.Uri;
 import android.os.Build;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
+import android.view.View;
 import android.widget.ImageView;
-
 import com.facebook.common.internal.Objects;
-import com.facebook.drawee.interfaces.DraweeHierarchy;
 import com.facebook.drawee.interfaces.DraweeController;
+import com.facebook.drawee.interfaces.DraweeHierarchy;
+import javax.annotation.Nullable;
 
 /**
  * View that displays a {@link DraweeHierarchy}.
@@ -47,6 +44,14 @@ public class DraweeView<DH extends DraweeHierarchy> extends ImageView {
   private float mAspectRatio = 0;
   private DraweeHolder<DH> mDraweeHolder;
   private boolean mInitialised = false;
+  private boolean mLegacyVisibilityHandlingEnabled = false;
+
+  private static boolean sGlobalLegacyVisibilityHandlingEnabled = false;
+
+  public static void setGlobalLegacyVisibilityHandlingEnabled(
+      boolean legacyVisibilityHandlingEnabled) {
+    sGlobalLegacyVisibilityHandlingEnabled = legacyVisibilityHandlingEnabled;
+  }
 
   public DraweeView(Context context) {
     super(context);
@@ -83,6 +88,10 @@ public class DraweeView<DH extends DraweeHierarchy> extends ImageView {
       }
       setColorFilter(imageTintList.getDefaultColor());
     }
+    // In Android N and above, visibility handling for Drawables has been changed, which breaks
+    // activity transitions with DraweeViews.
+    mLegacyVisibilityHandlingEnabled = sGlobalLegacyVisibilityHandlingEnabled &&
+        context.getApplicationInfo().targetSdkVersion >= 24; //Build.VERSION_CODES.N
   }
 
   /** Sets the hierarchy. */
@@ -125,24 +134,28 @@ public class DraweeView<DH extends DraweeHierarchy> extends ImageView {
   @Override
   protected void onAttachedToWindow() {
     super.onAttachedToWindow();
+    maybeOverrideVisibilityHandling();
     onAttach();
   }
 
   @Override
   protected void onDetachedFromWindow() {
     super.onDetachedFromWindow();
+    maybeOverrideVisibilityHandling();
     onDetach();
   }
 
   @Override
   public void onStartTemporaryDetach() {
     super.onStartTemporaryDetach();
+    maybeOverrideVisibilityHandling();
     onDetach();
   }
 
   @Override
   public void onFinishTemporaryDetach() {
     super.onFinishTemporaryDetach();
+    maybeOverrideVisibilityHandling();
     onAttach();
   }
 
@@ -248,6 +261,10 @@ public class DraweeView<DH extends DraweeHierarchy> extends ImageView {
     return mAspectRatio;
   }
 
+  public void setLegacyVisibilityHandlingEnabled(boolean legacyVisibilityHandlingEnabled) {
+    mLegacyVisibilityHandlingEnabled = legacyVisibilityHandlingEnabled;
+  }
+
   @Override
   protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
     mMeasureSpec.width = widthMeasureSpec;
@@ -259,6 +276,23 @@ public class DraweeView<DH extends DraweeHierarchy> extends ImageView {
         getPaddingLeft() + getPaddingRight(),
         getPaddingTop() + getPaddingBottom());
     super.onMeasure(mMeasureSpec.width, mMeasureSpec.height);
+  }
+
+  @Override
+  protected void onVisibilityChanged(
+      View changedView,
+      int visibility) {
+    super.onVisibilityChanged(changedView, visibility);
+    maybeOverrideVisibilityHandling();
+  }
+
+  private void maybeOverrideVisibilityHandling() {
+    if (mLegacyVisibilityHandlingEnabled)  {
+      Drawable drawable = getDrawable();
+      if (drawable != null) {
+        drawable.setVisible(getVisibility() == VISIBLE, false);
+      }
+    }
   }
 
   @Override

@@ -1,26 +1,22 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.bitmaps;
-
-import javax.annotation.concurrent.ThreadSafe;
 
 import android.annotation.TargetApi;
 import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.os.Build;
-
+import com.facebook.common.memory.PooledByteBuffer;
 import com.facebook.common.references.CloseableReference;
-import com.facebook.imageformat.ImageFormat;
+import com.facebook.imageformat.DefaultImageFormats;
 import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
 import com.facebook.imagepipeline.platform.PlatformDecoder;
+import javax.annotation.concurrent.ThreadSafe;
 
 /**
  * Factory implementation for Honeycomb through Kitkat
@@ -49,6 +45,7 @@ public class HoneycombBitmapFactory extends PlatformBitmapFactory {
    * @throws TooManyBitmapsException if the pool is full
    * @throws java.lang.OutOfMemoryError if the Bitmap cannot be allocated
    */
+  @TargetApi(Build.VERSION_CODES.HONEYCOMB_MR1)
   @Override
   public CloseableReference<Bitmap> createBitmapInternal(
       int width,
@@ -59,10 +56,12 @@ public class HoneycombBitmapFactory extends PlatformBitmapFactory {
         (short) height);
     try {
       EncodedImage encodedImage = new EncodedImage(jpgRef);
-      encodedImage.setImageFormat(ImageFormat.JPEG);
+      encodedImage.setImageFormat(DefaultImageFormats.JPEG);
       try {
-        CloseableReference<Bitmap> bitmapRef = mPurgeableDecoder.decodeJPEGFromEncodedImage(
-            encodedImage, bitmapConfig, jpgRef.get().size());
+        CloseableReference<Bitmap> bitmapRef =
+            mPurgeableDecoder.decodeJPEGFromEncodedImage(
+                encodedImage, bitmapConfig, null, jpgRef.get().size());
+        bitmapRef.get().setHasAlpha(true);
         bitmapRef.get().eraseColor(Color.TRANSPARENT);
         return bitmapRef;
       } finally {

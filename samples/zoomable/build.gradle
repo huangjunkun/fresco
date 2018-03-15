@@ -1,11 +1,13 @@
 apply plugin: 'com.android.library'
 
 dependencies {
-    compile project(':drawee-backends:drawee-pipeline')
-    compile project(':samples:gestures')
-    compile "com.nineoldandroids:library:${NINEOLDANDROID_VERSION}"
-    provided "com.android.support:support-annotations:${SUPPORT_LIB_VERSION}"
-    provided "com.google.code.findbugs:jsr305:${JSR_305_VERSION}"
+    compileOnly "com.android.support:support-annotations:${SUPPORT_LIB_VERSION}"
+    compileOnly "com.android.support:support-core-utils:${SUPPORT_LIB_VERSION}"
+    compileOnly "com.google.code.findbugs:jsr305:${JSR_305_VERSION}"
+
+    implementation "com.nineoldandroids:library:${NINEOLDANDROID_VERSION}"
+    implementation project(':drawee-backends:drawee-pipeline')
+    implementation project(':samples:gestures')
 }
 
 android {
@@ -20,5 +22,9 @@ android {
         exclude 'META-INF/LICENSE.txt'
         exclude 'META-INF/NOTICE'
         exclude 'META-INF/NOTICE.txt'
+    }
+
+    lintOptions {
+        abortOnError false
     }
 }

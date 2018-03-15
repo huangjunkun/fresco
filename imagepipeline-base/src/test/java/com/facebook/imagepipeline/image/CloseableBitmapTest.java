@@ -1,25 +1,23 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.image;
 
+import static org.mockito.Mockito.*;
+
 import android.graphics.Bitmap;
-
+import android.media.ExifInterface;
 import com.facebook.common.references.ResourceReleaser;
-
 import junit.framework.Assert;
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
 import org.robolectric.*;
 
-import static org.mockito.Mockito.*;
 /**
  * Basic tests for closeable bitmap
  */
@@ -34,7 +32,12 @@ public class CloseableBitmapTest  {
   public void setup() {
     MockitoAnnotations.initMocks(this);
     mCloseableStaticBitmap =
-        new CloseableStaticBitmap(mBitmap, mResourceReleaser, ImmutableQualityInfo.FULL_QUALITY, 0);
+        new CloseableStaticBitmap(
+            mBitmap,
+            mResourceReleaser,
+            ImmutableQualityInfo.FULL_QUALITY,
+            0,
+            ExifInterface.ORIENTATION_UNDEFINED);
   }
 
   @Test

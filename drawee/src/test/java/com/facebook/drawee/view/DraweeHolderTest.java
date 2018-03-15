@@ -1,35 +1,35 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.drawee.view;
 
-import android.graphics.drawable.Drawable;
-
-import com.facebook.drawee.drawable.DrawableTestUtils;
-import com.facebook.drawee.interfaces.DraweeHierarchy;
-import com.facebook.drawee.interfaces.DraweeController;
-import com.facebook.drawee.testing.DraweeMocks;
-import org.robolectric.RobolectricTestRunner;
-
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.InOrder;
-
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+
+import android.graphics.drawable.Drawable;
+import android.view.MotionEvent;
+import com.facebook.drawee.drawable.DrawableTestUtils;
+import com.facebook.drawee.interfaces.DraweeController;
+import com.facebook.drawee.interfaces.DraweeHierarchy;
+import com.facebook.drawee.testing.DraweeMocks;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.InOrder;
+import org.robolectric.RobolectricTestRunner;
 
 @RunWith(RobolectricTestRunner.class)
 public class DraweeHolderTest {
@@ -65,6 +65,16 @@ public class DraweeHolderTest {
   @Test
   public void testSetControllerWithoutHierarchy() {
     mDraweeHolder.setController(mController);
+    assertSame(mController, mDraweeHolder.getController());
+    assertSame(mDraweeHierarchy, mDraweeHolder.getHierarchy());
+    assertSame(mDraweeHierarchy, mController.getHierarchy());
+  }
+
+  @Test
+  public void testSetControllerBeforeHierarchy() {
+    mDraweeHolder = new DraweeHolder(null);
+    mDraweeHolder.setController(mController);
+    mDraweeHolder.setHierarchy(mDraweeHierarchy);
     assertSame(mController, mDraweeHolder.getController());
     assertSame(mDraweeHierarchy, mDraweeHolder.getHierarchy());
     assertSame(mDraweeHierarchy, mController.getHierarchy());
@@ -122,75 +132,55 @@ public class DraweeHolderTest {
   }
 
   @Test
-  public void testAttachAndTrim() {
-    mDraweeHolder.setController(mController);
+  public void testSetNewControllerWithInvalidController() {
+    final DraweeHierarchy draweeHierarchy2 = DraweeMocks.mockDraweeHierarchyOf(mTopLevelDrawable);
+    final DraweeHolder draweeHolder2 = new DraweeHolder(draweeHierarchy2);
+
     mDraweeHolder.onAttach();
-    mDraweeHolder.trim();
-    mInOrderVerifier.verify(mController).onAttach();
-    mInOrderVerifier.verify(mController).onDetach();
-    assertTrue(mDraweeHolder.isAttached());
+    mDraweeHolder.setController(mController);
+    draweeHolder2.setController(mController);
+
+    mDraweeHolder.setController(null);
+    verify(mController, never()).onDetach();
+    assertEquals(draweeHierarchy2, mController.getHierarchy());
   }
 
   @Test
-  public void testAttachTrimUntrim() {
+  public void testSetNewHierarchyWithInvalidController() {
+    final DraweeHierarchy draweeHierarchy2 = DraweeMocks.mockDraweeHierarchyOf(mTopLevelDrawable);
+    final DraweeHolder draweeHolder2 = new DraweeHolder(draweeHierarchy2);
+
     mDraweeHolder.setController(mController);
-    mDraweeHolder.onAttach();
-    mDraweeHolder.trim();
-    mDraweeHolder.untrim();
-    mInOrderVerifier.verify(mController).onAttach();
-    mInOrderVerifier.verify(mController).onDetach();
-    mInOrderVerifier.verify(mController).onAttach();
-    assertTrue(mDraweeHolder.isAttached());
+    draweeHolder2.setController(mController);
+
+    final DraweeHierarchy draweeHierarchy3 = DraweeMocks.mockDraweeHierarchyOf(mTopLevelDrawable);
+    mDraweeHolder.setHierarchy(draweeHierarchy3);
+    assertEquals(draweeHierarchy2, mController.getHierarchy());
   }
 
   @Test
-  public void testAttachTrimDetachUntrim() {
-    mDraweeHolder.setController(mController);
+  public void testOnDetachWithInvalidController() {
+    final DraweeHierarchy draweeHierarchy2 = DraweeMocks.mockDraweeHierarchyOf(mTopLevelDrawable);
+    final DraweeHolder draweeHolder2 = new DraweeHolder(draweeHierarchy2);
+
     mDraweeHolder.onAttach();
-    mDraweeHolder.trim();
+    mDraweeHolder.setController(mController);
+    draweeHolder2.setController(mController);
+
     mDraweeHolder.onDetach();
-    mDraweeHolder.untrim();
-    mInOrderVerifier.verify(mController).onAttach();
-    mInOrderVerifier.verify(mController).onDetach();
-    assertFalse(mDraweeHolder.isAttached());
+    verify(mController, never()).onDetach();
   }
 
   @Test
-  public void testAttachTrimUntrimDetach() {
-    mDraweeHolder.setController(mController);
-    mDraweeHolder.onAttach();
-    mDraweeHolder.trim();
-    mDraweeHolder.untrim();
-    mDraweeHolder.onDetach();
-    mInOrderVerifier.verify(mController).onAttach();
-    mInOrderVerifier.verify(mController).onDetach();
-    mInOrderVerifier.verify(mController).onAttach();
-    mInOrderVerifier.verify(mController).onDetach();
-    assertFalse(mDraweeHolder.isAttached());
-  }
+  public void testTouchEventWithInvalidController() {
+    final DraweeHierarchy draweeHierarchy2 = DraweeMocks.mockDraweeHierarchyOf(mTopLevelDrawable);
+    final DraweeHolder draweeHolder2 = new DraweeHolder(draweeHierarchy2);
 
-  @Test
-  public void testDetachPreventsUntrim() {
     mDraweeHolder.setController(mController);
-    mDraweeHolder.onAttach();
-    mDraweeHolder.onDetach();
-    mDraweeHolder.trim();
-    mDraweeHolder.untrim();
-    assertFalse(mDraweeHolder.isAttached());
-  }
+    draweeHolder2.setController(mController);
 
-  @Test
-  public void testReattachAfterTrim() {
-    mDraweeHolder.setController(mController);
-    mDraweeHolder.onAttach();
-    mDraweeHolder.trim();
-    mDraweeHolder.onDetach();
-    mDraweeHolder.untrim();
-    mDraweeHolder.onAttach();
-    mInOrderVerifier.verify(mController).onAttach();
-    mInOrderVerifier.verify(mController).onDetach();
-    mInOrderVerifier.verify(mController).onAttach();
-    assertTrue(mDraweeHolder.isAttached());
+    mDraweeHolder.onTouchEvent(mock(MotionEvent.class));
+    verify(mController, never()).onTouchEvent(any(MotionEvent.class));
   }
 
   /** There are 8 possible state transitions with two variables

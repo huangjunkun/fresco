@@ -1,24 +1,21 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.nativecode;
 
+import android.os.Build;
+import com.facebook.common.internal.DoNotStrip;
+import com.facebook.common.internal.Preconditions;
+import com.facebook.common.webp.WebpSupportStatus;
+import com.facebook.imageformat.DefaultImageFormats;
+import com.facebook.imageformat.ImageFormat;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-
-import android.os.Build;
-
-import com.facebook.common.internal.DoNotStrip;
-import com.facebook.common.internal.Preconditions;
-import com.facebook.imageformat.ImageFormat;
-import com.facebook.common.webp.WebpSupportStatus;
 
 /**
  * Helper methods for modifying webp static images.
@@ -31,19 +28,17 @@ public class WebpTranscoderImpl implements WebpTranscoder {
    */
   @Override
   public boolean isWebpNativelySupported(ImageFormat webpFormat) {
-    switch (webpFormat) {
-      case WEBP_SIMPLE: // Simple WebPs are supported on Android 4.0+
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH;
-      case WEBP_LOSSLESS:
-      case WEBP_EXTENDED:
-      case WEBP_EXTENDED_WITH_ALPHA:
-        return WebpSupportStatus.sIsExtendedWebpSupported;
-      case WEBP_ANIMATED:
-        return false;
-      default:
-        Preconditions.checkArgument(false);
-        return false;
+    if (webpFormat == DefaultImageFormats.WEBP_SIMPLE) {
+      // Simple WebPs are supported on Android 4.0+
+      return Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH;
+    } else if (webpFormat == DefaultImageFormats.WEBP_LOSSLESS ||
+        webpFormat == DefaultImageFormats.WEBP_EXTENDED ||
+        webpFormat == DefaultImageFormats.WEBP_EXTENDED_WITH_ALPHA) {
+      return WebpSupportStatus.sIsExtendedWebpSupported;
+    } else if (webpFormat == DefaultImageFormats.WEBP_ANIMATED) {
+      return false;
     }
+    throw new IllegalArgumentException("Image format is not a WebP.");
   }
 
   /**

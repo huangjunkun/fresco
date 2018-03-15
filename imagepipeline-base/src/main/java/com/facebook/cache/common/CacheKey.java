@@ -1,10 +1,8 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.cache.common;
@@ -33,4 +31,10 @@ public interface CacheKey {
    * Used for cases like deleting all keys for a given uri.
    */
   boolean containsUri(Uri uri);
+
+  /**
+   * Returns a string representation of the URI at the heart of the cache key. In cases of multiple
+   * keys being contained, the first is returned.
+   */
+  String getUriString();
 }

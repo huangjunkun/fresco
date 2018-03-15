@@ -1,31 +1,26 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.datasource;
 
-import javax.annotation.Nullable;
-
-import java.util.Arrays;
-import java.util.List;
-import java.util.concurrent.Executor;
+import static org.junit.Assert.*;
+import static org.mockito.Mockito.*;
 
 import com.facebook.common.executors.CallerThreadExecutor;
 import com.facebook.common.internal.Supplier;
-
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Executor;
+import javax.annotation.Nullable;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 import org.mockito.verification.VerificationMode;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 public class DataSourceTestUtils {
 

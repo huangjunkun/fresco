@@ -1,13 +1,20 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.animated.impl;
+
+import static junit.framework.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.facebook.cache.common.CacheKey;
 import com.facebook.cache.common.SimpleCacheKey;
@@ -20,20 +27,12 @@ import com.facebook.imagepipeline.cache.BitmapCountingMemoryCacheFactory;
 import com.facebook.imagepipeline.cache.CountingMemoryCache;
 import com.facebook.imagepipeline.cache.MemoryCacheParams;
 import com.facebook.imagepipeline.image.CloseableImage;
-
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.robolectric.RobolectricTestRunner;
-
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNotSame;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertSame;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @RunWith(RobolectricTestRunner.class)
 public class AnimatedFrameCacheTest {
@@ -111,5 +110,65 @@ public class AnimatedFrameCacheTest {
     CloseableReference<CloseableImage> ret = mAnimatedFrameCache.cache(1, mFrame1);
     ret.close();
     assertNotNull(mAnimatedFrameCache.get(1));
+  }
+
+  @Test
+  public void testContains() {
+    assertFalse(mAnimatedFrameCache.contains(1));
+
+    CloseableReference<CloseableImage> ret = mAnimatedFrameCache.cache(1, mFrame1);
+
+    assertTrue(mAnimatedFrameCache.contains(1));
+    assertFalse(mAnimatedFrameCache.contains(2));
+
+    ret.close();
+
+    assertTrue(mAnimatedFrameCache.contains(1));
+    assertFalse(mAnimatedFrameCache.contains(2));
+  }
+
+  @Test
+  public void testContainsWhenReused() {
+    CloseableReference<CloseableImage> ret = mAnimatedFrameCache.cache(1, mFrame1);
+    ret.close();
+
+    assertTrue(mAnimatedFrameCache.contains(1));
+    assertFalse(mAnimatedFrameCache.contains(2));
+
+    CloseableReference<CloseableImage> free = mAnimatedFrameCache.getForReuse();
+    free.close();
+
+    assertFalse(mAnimatedFrameCache.contains(1));
+    assertFalse(mAnimatedFrameCache.contains(2));
+  }
+
+  @Test
+  public void testContainsFullReuseFlowWithMultipleItems() {
+    assertFalse(mAnimatedFrameCache.contains(1));
+    assertFalse(mAnimatedFrameCache.contains(2));
+
+    CloseableReference<CloseableImage> ret = mAnimatedFrameCache.cache(1, mFrame1);
+    CloseableReference<CloseableImage> ret2 = mAnimatedFrameCache.cache(2, mFrame2);
+
+    assertTrue(mAnimatedFrameCache.contains(1));
+    assertTrue(mAnimatedFrameCache.contains(2));
+
+    ret.close();
+    ret2.close();
+
+    assertTrue(mAnimatedFrameCache.contains(1));
+    assertTrue(mAnimatedFrameCache.contains(2));
+
+    CloseableReference<CloseableImage> free = mAnimatedFrameCache.getForReuse();
+    free.close();
+
+    assertFalse(mAnimatedFrameCache.contains(1));
+    assertTrue(mAnimatedFrameCache.contains(2));
+
+    free = mAnimatedFrameCache.getForReuse();
+    free.close();
+
+    assertFalse(mAnimatedFrameCache.contains(1));
+    assertFalse(mAnimatedFrameCache.contains(2));
   }
 }

@@ -1,30 +1,27 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import java.io.File;
-import java.io.InputStream;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
+import static org.mockito.Mockito.*;
 
 import android.content.ContentResolver;
-import android.graphics.Rect;
 import android.net.Uri;
-
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.common.Priority;
-import com.facebook.imagepipeline.common.ResizeOptions;
 import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
 import com.facebook.imagepipeline.request.ImageRequest;
 import com.facebook.imagepipeline.testing.FakeClock;
 import com.facebook.imagepipeline.testing.TestExecutorService;
-
+import java.io.File;
+import java.io.InputStream;
 import org.junit.*;
 import org.junit.runner.*;
 import org.mockito.*;
@@ -32,9 +29,6 @@ import org.mockito.invocation.*;
 import org.mockito.stubbing.*;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.*;
-
-import static org.junit.Assert.*;
-import static org.mockito.Mockito.*;
 
 /**
  * Basic tests for LocalContentUriFetchProducer
@@ -63,8 +57,8 @@ public class LocalContentUriFetchProducerTest {
     mLocalContentUriFetchProducer = new LocalContentUriFetchProducer(
         mExecutor,
         mPooledByteBufferFactory,
-        mContentResolver,
-        false);
+        mContentResolver
+    );
     mContentUri = Uri.fromFile(mock(File.class));
 
     mProducerContext = new SettableProducerContext(
@@ -87,7 +81,7 @@ public class LocalContentUriFetchProducerTest {
           }
         })
         .when(mConsumer)
-        .onNewResult(notNull(EncodedImage.class), anyBoolean());
+        .onNewResult(notNull(EncodedImage.class), anyInt());
   }
 
   @Test
@@ -111,6 +105,14 @@ public class LocalContentUriFetchProducerTest {
     mLocalContentUriFetchProducer.produceResults(mConsumer, mProducerContext);
 
     mExecutor.runUntilIdle();
+
+    assertEquals(
+        2,
+        mCapturedEncodedImage.getByteBufferRef()
+            .getUnderlyingReferenceTestOnly().getRefCountTestOnly());
+    assertSame(pooledByteBuffer, mCapturedEncodedImage.getByteBufferRef().get());
+    verify(mProducerListener).onProducerStart(mRequestId, PRODUCER_NAME);
+    verify(mProducerListener).onUltimateProducerReached(mRequestId, PRODUCER_NAME, true);
   }
 
   @Test(expected = RuntimeException.class)
@@ -120,5 +122,6 @@ public class LocalContentUriFetchProducerTest {
     verify(mProducerListener).onProducerStart(mRequestId, PRODUCER_NAME);
     verify(mProducerListener).onProducerFinishWithFailure(
         mRequestId, PRODUCER_NAME, mException, null);
+    verify(mProducerListener).onUltimateProducerReached(mRequestId, PRODUCER_NAME, false);
   }
 }

@@ -1,29 +1,25 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.producers;
 
-import javax.annotation.Nullable;
-
+import android.os.SystemClock;
+import com.facebook.common.internal.VisibleForTesting;
+import com.facebook.common.memory.ByteArrayPool;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.memory.PooledByteBufferFactory;
+import com.facebook.common.memory.PooledByteBufferOutputStream;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.imagepipeline.common.BytesRange;
+import com.facebook.imagepipeline.image.EncodedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Map;
-
-import android.os.SystemClock;
-
-import com.facebook.common.internal.VisibleForTesting;
-import com.facebook.common.references.CloseableReference;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.ByteArrayPool;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.memory.PooledByteBufferFactory;
-import com.facebook.imagepipeline.memory.PooledByteBufferOutputStream;
+import javax.annotation.Nullable;
 
 /**
  * A producer to actually fetch images from the network.
@@ -36,7 +32,7 @@ import com.facebook.imagepipeline.memory.PooledByteBufferOutputStream;
  */
 public class NetworkFetchProducer implements Producer<EncodedImage> {
 
-  @VisibleForTesting static final String PRODUCER_NAME = "NetworkFetchProducer";
+  public static final String PRODUCER_NAME = "NetworkFetchProducer";
   public static final String INTERMEDIATE_RESULT_PRODUCER_EVENT = "intermediate_result";
   private static final int READ_SIZE = 16 * 1024;
 
@@ -84,10 +80,8 @@ public class NetworkFetchProducer implements Producer<EncodedImage> {
         });
   }
 
-  private void onResponse(
-      FetchState fetchState,
-      InputStream responseData,
-      int responseContentLength)
+  protected void onResponse(
+      FetchState fetchState, InputStream responseData, int responseContentLength)
       throws IOException {
     final PooledByteBufferOutputStream pooledOutputStream;
     if (responseContentLength > 0) {
@@ -114,7 +108,7 @@ public class NetworkFetchProducer implements Producer<EncodedImage> {
     }
   }
 
-  private static float calculateProgress(int downloaded, int total) {
+  protected static float calculateProgress(int downloaded, int total) {
     if (total > 0) {
       return (float) downloaded / total;
     } else {
@@ -133,39 +127,48 @@ public class NetworkFetchProducer implements Producer<EncodedImage> {
     }
   }
 
-  private void maybeHandleIntermediateResult(
-      PooledByteBufferOutputStream pooledOutputStream,
-      FetchState fetchState) {
+  protected void maybeHandleIntermediateResult(
+      PooledByteBufferOutputStream pooledOutputStream, FetchState fetchState) {
     final long nowMs = SystemClock.uptimeMillis();
     if (shouldPropagateIntermediateResults(fetchState) &&
         nowMs - fetchState.getLastIntermediateResultTimeMs() >= TIME_BETWEEN_PARTIAL_RESULTS_MS) {
       fetchState.setLastIntermediateResultTimeMs(nowMs);
       fetchState.getListener()
           .onProducerEvent(fetchState.getId(), PRODUCER_NAME, INTERMEDIATE_RESULT_PRODUCER_EVENT);
-      notifyConsumer(pooledOutputStream, false, fetchState.getConsumer());
+      notifyConsumer(
+          pooledOutputStream,
+          fetchState.getOnNewResultStatusFlags(),
+          fetchState.getResponseBytesRange(),
+          fetchState.getConsumer());
     }
   }
 
-  private void handleFinalResult(
-      PooledByteBufferOutputStream pooledOutputStream,
-      FetchState fetchState) {
+  protected void handleFinalResult(
+      PooledByteBufferOutputStream pooledOutputStream, FetchState fetchState) {
     Map<String, String> extraMap = getExtraMap(fetchState, pooledOutputStream.size());
-    fetchState.getListener()
-        .onProducerFinishWithSuccess(fetchState.getId(), PRODUCER_NAME, extraMap);
-    notifyConsumer(pooledOutputStream, true, fetchState.getConsumer());
+    ProducerListener listener = fetchState.getListener();
+    listener.onProducerFinishWithSuccess(fetchState.getId(), PRODUCER_NAME, extraMap);
+    listener.onUltimateProducerReached(fetchState.getId(), PRODUCER_NAME, true);
+    notifyConsumer(
+        pooledOutputStream,
+        Consumer.IS_LAST | fetchState.getOnNewResultStatusFlags(),
+        fetchState.getResponseBytesRange(),
+        fetchState.getConsumer());
   }
 
   private void notifyConsumer(
       PooledByteBufferOutputStream pooledOutputStream,
-      boolean isFinal,
+      @Consumer.Status int status,
+      @Nullable BytesRange responseBytesRange,
       Consumer<EncodedImage> consumer) {
     CloseableReference<PooledByteBuffer> result =
         CloseableReference.of(pooledOutputStream.toByteBuffer());
     EncodedImage encodedImage = null;
     try {
       encodedImage = new EncodedImage(result);
+      encodedImage.setBytesRange(responseBytesRange);
       encodedImage.parseMetaData();
-      consumer.onNewResult(encodedImage, isFinal);
+      consumer.onNewResult(encodedImage, status);
     } finally {
       EncodedImage.closeSafely(encodedImage);
       CloseableReference.closeSafely(result);
@@ -175,6 +178,8 @@ public class NetworkFetchProducer implements Producer<EncodedImage> {
   private void onFailure(FetchState fetchState, Throwable e) {
     fetchState.getListener()
         .onProducerFinishWithFailure(fetchState.getId(), PRODUCER_NAME, e, null);
+    fetchState.getListener()
+        .onUltimateProducerReached(fetchState.getId(), PRODUCER_NAME, false);
     fetchState.getConsumer().onFailure(e);
   }
 
@@ -185,7 +190,7 @@ public class NetworkFetchProducer implements Producer<EncodedImage> {
   }
 
   private boolean shouldPropagateIntermediateResults(FetchState fetchState) {
-    if (!fetchState.getContext().getImageRequest().getProgressiveRenderingEnabled()) {
+    if (!fetchState.getContext().isIntermediateResultExpected()) {
       return false;
     }
     return mNetworkFetcher.shouldPropagate(fetchState);

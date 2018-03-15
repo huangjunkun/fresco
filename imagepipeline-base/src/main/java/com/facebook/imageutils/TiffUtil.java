@@ -1,20 +1,16 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imageutils;
 
 import android.media.ExifInterface;
-
+import com.facebook.common.logging.FLog;
 import java.io.IOException;
 import java.io.InputStream;
-
-import com.facebook.common.logging.FLog;
 
 /**
  * Util for getting exif orientation from a jpeg stored as a byte array.
@@ -30,12 +26,14 @@ class TiffUtil {
 
   /**
    * Determines auto-rotate angle based on orientation information.
+   *
    * @param orientation orientation information read from APP1 EXIF (TIFF) block.
-   * @return orientation: 1/3/6/8 -> 0/180/90/270.
+   * @return orientation: 1/3/6/8 -> 0/180/90/270. Returns 0 for inverted orientations (2/4/5/7).
    */
   public static int getAutoRotateAngleFromOrientation(int orientation) {
     switch (orientation) {
       case ExifInterface.ORIENTATION_NORMAL:
+      case ExifInterface.ORIENTATION_UNDEFINED:
         return 0;
       case ExifInterface.ORIENTATION_ROTATE_180:
         return 180;
@@ -44,7 +42,6 @@ class TiffUtil {
       case ExifInterface.ORIENTATION_ROTATE_270:
         return 270;
     }
-    FLog.i(TAG, "Unsupported orientation");
     return 0;
   }
 

@@ -1,48 +1,40 @@
 /*
  * Copyright (c) 2015-present, Facebook, Inc.
- * All rights reserved.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.imagepipeline.platform;
-
-import java.io.FileDescriptor;
-
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.Rect;
-import android.os.Build;
-
-import com.facebook.common.references.CloseableReference;
-import com.facebook.common.references.ResourceReleaser;
-import com.facebook.common.soloader.SoLoaderShim;
-import com.facebook.imagepipeline.image.EncodedImage;
-import com.facebook.imagepipeline.memory.BitmapCounter;
-import com.facebook.imagepipeline.memory.BitmapCounterProvider;
-import com.facebook.imagepipeline.memory.PooledByteBuffer;
-import com.facebook.imagepipeline.nativecode.Bitmaps;
-import com.facebook.imagepipeline.testing.MockBitmapFactory;
-import com.facebook.imagepipeline.testing.TrivialPooledByteBuffer;
-
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.modules.junit4.rule.PowerMockRule;
-import org.robolectric.RobolectricTestRunner;
-
-import org.junit.runner.RunWith;
-import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
-import org.robolectric.annotation.Config;
 
 import static org.junit.Assume.assumeNotNull;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.powermock.api.mockito.PowerMockito.mockStatic;
+
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.Rect;
+import com.facebook.common.memory.PooledByteBuffer;
+import com.facebook.common.references.CloseableReference;
+import com.facebook.common.references.ResourceReleaser;
+import com.facebook.imagepipeline.image.EncodedImage;
+import com.facebook.imagepipeline.memory.BitmapCounter;
+import com.facebook.imagepipeline.memory.BitmapCounterProvider;
+import com.facebook.imagepipeline.nativecode.Bitmaps;
+import com.facebook.imagepipeline.testing.MockBitmapFactory;
+import com.facebook.imagepipeline.testing.TrivialPooledByteBuffer;
+import com.facebook.soloader.SoLoader;
+import java.io.FileDescriptor;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
+import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
+import org.powermock.modules.junit4.rule.PowerMockRule;
+import org.robolectric.RobolectricTestRunner;
 
 /**
  * Tests for {@link GingerbreadPurgeableDecoder}.
@@ -62,7 +54,7 @@ public class GingerbreadPurgeableDecoderTest {
   public PowerMockRule rule = new PowerMockRule();
 
   static {
-    SoLoaderShim.setInTestMode();
+    SoLoader.setInTestMode();
   }
 
   protected static final int IMAGE_SIZE = 5;
@@ -106,7 +98,7 @@ public class GingerbreadPurgeableDecoderTest {
     mDecodeBufRef = CloseableReference.of(mDecodeBuf, mock(ResourceReleaser.class));
 
     mockStatic(Bitmaps.class);
-    mGingerbreadPurgeableDecoder = new GingerbreadPurgeableDecoder(false);
+    mGingerbreadPurgeableDecoder = new GingerbreadPurgeableDecoder();
   }
 
   @Test
